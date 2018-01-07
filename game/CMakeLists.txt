@@ -1,0 +1,6 @@
+include_directories(. ../external ../src ../thirdparty/lua)
+aux_source_directory(ai AI_LIST)
+aux_source_directory(aoi AOI_LIST)
+aux_source_directory(tile TILE_LIST)
+add_library(game STATIC ${AI_LIST} ${AOI_LIST} ${TILE_LIST})
+set(CMAKE_CXX_FLAGS "-Wall -std=c++11 -pthread")

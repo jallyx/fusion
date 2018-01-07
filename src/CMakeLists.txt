@@ -1,0 +1,13 @@
+include_directories(. ../external ../thirdparty ../thirdparty/asio ../thirdparty/lua)
+aux_source_directory(. SRC_LIST)
+aux_source_directory(async ASYNC_SRC_LIST)
+aux_source_directory(http HTTP_SRC_LIST)
+aux_source_directory(lua LUA_SRC_LIST)
+aux_source_directory(mysql MYSQL_SRC_LIST)
+aux_source_directory(network NETWORK_SRC_LIST)
+aux_source_directory(openssl OPENSSL_SRC_LIST)
+aux_source_directory(timer TIMER_SRC_LIST)
+aux_source_directory(zlib ZLIB_SRC_LIST)
+add_library(fusion STATIC ${SRC_LIST} ${ASYNC_SRC_LIST} ${HTTP_SRC_LIST} ${LUA_SRC_LIST}
+${MYSQL_SRC_LIST} ${NETWORK_SRC_LIST} ${OPENSSL_SRC_LIST} ${TIMER_SRC_LIST} ${ZLIB_SRC_LIST})
+set(CMAKE_CXX_FLAGS "-Wall -std=c++11 -pthread")
