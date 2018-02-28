@@ -16,21 +16,6 @@ protected:
     virtual void OnPrepare() {}
 };
 
-class AIInstructionNode : public AIActionNode
-{
-public:
-    AIInstructionNode(AIBlackboard &blackboard);
-    virtual ~AIInstructionNode();
-
-    int SetInstructions(lua_State *L);
-
-protected:
-    virtual Status Kernel();
-
-private:
-    LuaRef instructions_;
-};
-
 class AIScriptableNode : public AIActionNode
 {
 public:

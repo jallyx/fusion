@@ -1,9 +1,8 @@
 #pragma once
 
-#include <atomic>
 #include "AsioHeader.h"
 #include "CircularBuffer.h"
-#include "NetPacket.h"
+#include "SendBuffer.h"
 #include "zlib/ZlibStream.h"
 
 class ConnectionManager;
@@ -16,17 +15,16 @@ public:
     ~Connection();
 
     void Init();
-    void Reset();
-    void Close();
 
     void PostReadRequest();
     void PostWriteRequest();
+    void PostCloseRequest();
 
-    void SetSocket(const asio::ip::tcp::socket::protocol_type &protocol, int socket);
+    void SetSocket(const asio::ip::tcp::socket::protocol_type &protocol, SOCKET socket);
     void AsyncConnect(const std::string &address, const std::string &port);
 
-    template <typename T> T *GetSendBuffer() const;
-    bool IsSendBufferEmpty() const;
+    bool HasSendDataAwaiting() const;
+    size_t GetSendDataSize() const;
 
     bool IsActive() const { return is_active_; }
     bool IsConnected() const { return is_connected_; }
@@ -34,10 +32,14 @@ public:
     const std::string &addr() const { return addr_; }
     unsigned short port() const { return port_; }
 
+    SendBuffer &GetSendBuffer() { return send_buffer_; }
+
     static void InitSendBufferPool();
     static void ClearSendBufferPool();
 
 private:
+    void Close();
+
     void StartNextRead();
     void StartNextWrite();
 
@@ -55,9 +57,6 @@ private:
     void PreprocessRecvData();
     void PreprocessSendData();
 
-    void ClearRecvData();
-    void ClearSendData();
-
     void RenewRemoteEndpoint();
 
     CircularBuffer &GetFinalRecvBuffer();
@@ -67,14 +66,14 @@ private:
     Session &session_;
     bool is_active_;
 
+    asio::io_service::strand strand_;
     asio::ip::tcp::resolver resolver_;
     asio::ip::tcp::socket sock_;
     std::string addr_;
     unsigned short port_;
     bool is_connected_;
 
-    class SendBuffer;
-    SendBuffer *send_buffer_;
+    SendBuffer send_buffer_;
     CircularBuffer recv_buffer_;
 
     zlib::DeflateStream *deflate_stream_;

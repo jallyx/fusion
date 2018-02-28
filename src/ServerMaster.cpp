@@ -5,6 +5,7 @@
 #include "OS.h"
 #include "CoreDumper.h"
 #include "SignalHandler.h"
+#include "System.h"
 
 IServerMaster *IServerMaster::instance_ = nullptr;
 IServerMaster::IServerMaster()
@@ -13,6 +14,9 @@ IServerMaster::IServerMaster()
 {
     assert(instance_ == nullptr);
     instance_ = this;
+
+    System::Init();
+    System::Update();
 
     Connection::InitSendBufferPool();
     INetPacket::InitNetPacketPool();
@@ -104,7 +108,7 @@ int IServerMaster::Run(int argc, char *argv[])
         FD_ZERO(&rset);
         FD_SET(STDIN_FILENO, &rset);
         struct timeval tv = {0, 0};
-        while (select(STDIN_FILENO + 1, &rset, nullptr, nullptr, &tv) == 1) {
+        if (select(STDIN_FILENO + 1, &rset, nullptr, nullptr, &tv) == 1) {
             int c = getchar();
             handler(c);
         }

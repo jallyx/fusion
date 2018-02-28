@@ -173,9 +173,9 @@ void HttpMgr::UpdateClients()
                 client->HandleWritable();
         }
         if (client->error() != HttpClient::ErrorNone) {
-            auto iterator = observer_list_.find(client);
-            if (iterator != observer_list_.end())
-                iterator->second->UpdateTaskStatus(client, client->error());
+            auto itr = observer_list_.find(client);
+            if (itr != observer_list_.end())
+                itr->second->UpdateTaskStatus(client, client->error());
         }
     }
 }

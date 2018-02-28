@@ -243,8 +243,8 @@ void HttpPost::ReadyBuildHeaderSimple()
 {
     std::ostringstream stream;
     for (auto &form_part : form_data_) {
-        stream << EncodeUrl(form_part.header_.c_str()) << '='
-               << EncodeUrl(form_part.value_.c_str()) << '&';
+        stream << EncodeUrl(form_part.header_) << '='
+               << EncodeUrl(form_part.value_) << '&';
     }
     if (!form_data_.empty()) {
         form_data_.erase(++form_data_.begin(), form_data_.end());

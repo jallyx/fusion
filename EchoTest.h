@@ -3,6 +3,7 @@
 #include "network/Listener.h"
 #include "ServerMaster.h"
 #include "Debugger.h"
+#include "System.h"
 #include "OS.h"
 
 #define HOST_STRING "127.0.0.1"
@@ -52,9 +53,8 @@ public:
         return SessionHandleSuccess;
     }
     void SendSomePacket() {
-        if (!GetConnection()->IsSendBufferEmpty()) {
-            if (System::Rand(0, 10000) < 9999)
-                return;
+        if (GetSendDataSize() > 65536 * 16) {
+            return;
         }
         for (int i = 0, total = System::Rand(0, 256); i < total; ++i) {
             const size_t offset = System::Rand(0, sDataManager.packet_string_.size());

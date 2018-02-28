@@ -2,17 +2,9 @@
 #include <tuple>
 #include <utility>
 
-namespace {
-struct SystemLoader {
-    SystemLoader() {
-        System::Init();
-        System::Update();
-    }
-}_;
-}
-
 time_t System::unix_time_;
 uint64 System::sys_time_;
+uint64 System::start_time_;
 struct tm System::date_time_;
 #if defined(_WIN32)
     LARGE_INTEGER System::performance_frequency_;
@@ -25,6 +17,7 @@ void System::Init()
     QueryPerformanceFrequency(&performance_frequency_);
 #endif
     random_engine_.seed(std::random_device()());
+    start_time_ = GetRealSysTime();
 }
 
 void System::Update()
@@ -59,6 +52,9 @@ static inline int PassDayTime(const struct tm &tm) {
 static inline int PassWeekTime(const struct tm &tm) {
     return (tm.tm_wday != 0 ? tm.tm_wday - 1 : 6) * 60*60*24 + PassDayTime(tm);
 }
+static inline int PassMonthTime(const struct tm &tm) {
+    return (tm.tm_mday - 1) * 60*60*24 + PassDayTime(tm);
+}
 
 time_t System::GetDayUnixTime()
 {
@@ -68,6 +64,11 @@ time_t System::GetDayUnixTime()
 time_t System::GetWeekUnixTime()
 {
     return unix_time_ - PassWeekTime(date_time_);
+}
+
+time_t System::GetMonthUnixTime()
+{
+    return unix_time_ - PassMonthTime(date_time_);
 }
 
 uint64 System::GetRealSysTime()

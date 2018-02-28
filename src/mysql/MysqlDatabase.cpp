@@ -20,7 +20,7 @@ MysqlDatabase::MysqlDatabase()
 MysqlDatabase::~MysqlDatabase()
 {
     for (; !connections_.empty(); connections_.pop()) {
-        DeleteConnection(connections_.top());
+        DeleteConnection(connections_.front());
     }
 }
 
@@ -53,7 +53,7 @@ MysqlConnection *MysqlDatabase::GetConnection()
     do {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!connections_.empty()) {
-            conn = connections_.top();
+            conn = connections_.front();
             connections_.pop();
         }
     } while (0);

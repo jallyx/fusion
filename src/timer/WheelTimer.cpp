@@ -22,6 +22,13 @@ void WheelTimer::DetachMgr()
     }
 }
 
+void WheelTimer::RePush(uint64 next_active_time)
+{
+    if (mgr_ != nullptr) {
+        mgr_->RePush(this, next_active_time);
+    }
+}
+
 void WheelTimer::SetNextActiveTime(uint64 next_active_time)
 {
     if (next_active_time == 0) {
@@ -29,15 +36,17 @@ void WheelTimer::SetNextActiveTime(uint64 next_active_time)
         active_tick_count_ = active_tick_interval + mgr_->tick_count_;
     } else {
         active_tick_count_ = next_active_time / mgr_->tick_particle_;
-        if (active_tick_count_ < mgr_->tick_count_)
+        if (active_tick_count_ < mgr_->tick_count_) {
             active_tick_count_ = mgr_->tick_count_;
+        }
     }
 }
 
 void WheelTimer::FixFirstActiveTime()
 {
-    if (active_tick_count_ < mgr_->tick_count_)
+    if (active_tick_count_ < mgr_->tick_count_) {
         active_tick_count_ = mgr_->tick_count_;
+    }
 }
 
 uint64 WheelTimer::GetCurrentTickTime() const

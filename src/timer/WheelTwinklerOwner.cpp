@@ -1,6 +1,8 @@
 #include "WheelTwinklerOwner.h"
 #include "WheelTwinkler.h"
 #include "WheelTimerMgr.h"
+#include "System.h"
+#include "Logger.h"
 
 class WheelTwinklerOwner::Twinkler : public WheelTwinkler
 {
@@ -83,6 +85,44 @@ private:
     std::weak_ptr<WheelTwinklerOwner> owner_;
 };
 
+class WheelTwinklerOwner::TwinklerByMonthly : public WheelTwinklerOwner::Twinkler {
+public:
+    TwinklerByMonthly(WheelTwinklerOwner *owner, TriggerPoint trigger_point, time_t trigger_duration,
+                      const std::function<void()> &start_cb, const std::function<void()> &stop_cb,
+                      uint32 routine_type, bool is_isolate, bool is_restore, uint32 repeats)
+        : Twinkler(owner, MAX_CYCLE_MONTHLY, CalcPreviousTriggerPointTimeByMonthly(trigger_point)
+        , trigger_duration, start_cb, stop_cb, routine_type, true, is_isolate, is_restore, repeats)
+        , trigger_point_(trigger_point)
+    {
+    }
+
+protected:
+    virtual bool OnPrepare()
+    {
+        if (GetCurrentTickTime() > uint64(GET_UNIX_TIME)) {
+            WLOG("CreateTwinklerByMonthly is invalid.");
+            return false;
+        }
+        time_t init_point_time = point_time();
+        WheelTwinklerOwner::Twinkler::OnPrepare();
+        if (point_time() != init_point_time) {
+            set_point_time(CalcNextTriggerPointTimeByMonthly(trigger_point_));
+            SetNextActiveTime(point_time());
+        }
+        return true;
+    }
+
+    virtual void OnStopActive()
+    {
+        set_point_time(CalcNextTriggerPointTimeByMonthly(trigger_point_));
+        SetNextActiveTime(point_time());
+        Twinkler::OnStopActive();
+    }
+
+private:
+    const TriggerPoint trigger_point_;
+};
+
 
 WheelTwinklerOwner::WheelTwinklerOwner()
 {
@@ -98,9 +138,18 @@ void WheelTwinklerOwner::CreateTwinkler(
     const std::function<void()> &start_cb, const std::function<void()> &stop_cb,
     uint32 routine_type, bool is_isolate, bool is_restore, uint32 repeats)
 {
-    GetCacheWheelTimerMgr()->Push(new Twinkler(
-        this, trigger_cycle, trigger_point, trigger_duration,
-        start_cb, stop_cb, routine_type, is_isolate, is_restore, repeats));
+    switch (trigger_cycle) {
+    case ByMonthlyTrigger:
+        GetCacheWheelTimerMgr()->Push(new TwinklerByMonthly(
+            this, trigger_point, trigger_duration,
+            start_cb, stop_cb, routine_type, is_isolate, is_restore, repeats));
+        break;
+    default:
+        GetCacheWheelTimerMgr()->Push(new Twinkler(
+            this, trigger_cycle, trigger_point, trigger_duration,
+            start_cb, stop_cb, routine_type, is_isolate, is_restore, repeats));
+        break;
+    }
 }
 
 void WheelTwinklerOwner::CreateTwinklerX(
@@ -108,9 +157,18 @@ void WheelTwinklerOwner::CreateTwinklerX(
     const std::function<void()> &start_cb, const std::function<void()> &stop_cb,
     bool is_isolate, bool is_restore, uint32 repeats)
 {
-    GetCacheWheelTimerMgr()->Push(new Twinkler(
-        this, trigger_cycle, trigger_point, trigger_duration,
-        start_cb, stop_cb, ~0, is_isolate, is_restore, repeats));
+    switch (trigger_cycle) {
+    case ByMonthlyTrigger:
+        GetCacheWheelTimerMgr()->Push(new TwinklerByMonthly(
+            this, trigger_point, trigger_duration,
+            start_cb, stop_cb, ~0, is_isolate, is_restore, repeats));
+        break;
+    default:
+        GetCacheWheelTimerMgr()->Push(new Twinkler(
+            this, trigger_cycle, trigger_point, trigger_duration,
+            start_cb, stop_cb, ~0, is_isolate, is_restore, repeats));
+        break;
+    }
 }
 
 void WheelTwinklerOwner::CreateTwinkler(

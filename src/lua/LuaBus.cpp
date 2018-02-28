@@ -3,6 +3,7 @@
 
 namespace lua {
 
+#define LITERAL_NUMBER "(_NUMBER_)"
 #define LITERAL_PARENT "(_PARENT_)"
 #define LITERAL_UNIQUE "(_UNIQUE_)"
 
@@ -281,17 +282,26 @@ static int downcast_object(lua_State *L)
     if (top >= 2 && lua_type(L, -2) == LUA_TUSERDATA && lua_istable(L, -1)) {
         lua_getmetatable(L, -2);
         if (!lua_rawequal(L, -1, -2)) {
-            lua_pushvalue(L, -2);
-            while (true) {
+            lua_pushliteral(L, LITERAL_NUMBER);
+            lua_pushvalue(L, -1);
+            lua_rawget(L, -3);
+            lua_rotate(L, -2, 1);
+            lua_rawget(L, -4);
+            if (lua_tointeger(L, -2) > lua_tointeger(L, -1)) {
+                lua_pop(L, 2);
                 lua_pushliteral(L, LITERAL_PARENT);
-                lua_rawget(L, -2);
-                if (!lua_istable(L, -1)) {
-                    break;
-                }
-                if (lua_rawequal(L, -1, top + 1)) {
-                    lua_pushvalue(L, top);
-                    lua_setmetatable(L, top - 1);
-                    break;
+                lua_pushvalue(L, -3);
+                for (;;lua_replace(L, -2)) {
+                    lua_pushvalue(L, -2);
+                    lua_rawget(L, -2);
+                    if (!lua_istable(L, -1)) {
+                        break;
+                    }
+                    if (lua_rawequal(L, -1, top + 1)) {
+                        lua_pushvalue(L, top);
+                        lua_setmetatable(L, top - 1);
+                        break;
+                    }
                 }
             }
         }
@@ -355,12 +365,39 @@ void register_prototype(lua_State *L, const char *name)
 void register_parent(lua_State *L, const char *name, const char *parent)
 {
     push_metatable(L, name);
-    if (lua_istable(L, -1)) {
+    push_metatable(L, parent);
+    if (lua_istable(L, -2) && lua_istable(L, -1)) {
+        lua_pushliteral(L, LITERAL_NUMBER);
         lua_pushliteral(L, LITERAL_PARENT);
-        push_metatable(L, parent);
-        lua_rawset(L, -3);
+        lua_pushvalue(L, -1);
+        lua_pushvalue(L, -4);
+        lua_rawset(L, -6);
+        lua_pushvalue(L, -2);
+        lua_rawget(L, -5);
+        lua_Integer nx = lua_tointeger(L, -1);
+        lua_pop(L, 1);
+        lua_pushvalue(L, -2);
+        lua_rawget(L, -4);
+        lua_Integer np = lua_tointeger(L, -1);
+        lua_pop(L, 1);
+        if (nx >= np) {
+            while (true) {
+                lua_pushvalue(L, -2);
+                lua_pushinteger(L, ++nx);
+                lua_rawset(L, -5);
+                lua_pushvalue(L, -1);
+                lua_rawget(L, -4);
+                if (lua_istable(L, -1)) {
+                    lua_replace(L, -4);
+                } else {
+                    lua_pop(L, 1);
+                    break;
+                }
+            }
+        }
+        lua_pop(L, 2);
     }
-    lua_pop(L, 1);
+    lua_pop(L, 2);
 }
 
 bool binder::try_push_this(lua_State *L, const char *metaname) const

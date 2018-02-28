@@ -91,6 +91,8 @@ public:
     void unbind(void *user, const char *name);
 protected:
     binder() : L_(nullptr), user_(nullptr) {}
+    binder(const binder &) : binder() {}
+    binder &operator=(const binder &) { return *this; }
     ~binder() { on_destroy(); }
 private:
     void register_this(lua_State *L) const;
@@ -104,7 +106,7 @@ class adapter {
 public:
     template<typename T> struct tracker_subclass {
         static void *base(T *obj) {
-            return static_cast<tracer*>(obj);
+            return ((void*)static_cast<const tracer *>(obj));
         }
         static T *self(void *obj) {
             return static_cast<T*>(reinterpret_cast<tracer*>(obj));
@@ -271,7 +273,7 @@ struct ptr2lua {
                     binder2lua<T>, nonbinder2lua<T>
                 >::type::invoke(L, input);
             } else {
-                lua_pushlightuserdata(L, (void*)input);
+                lua_pushlightuserdata(L, adapter::base<T>(input));
             }
         } else {
             lua_pushnil(L);
@@ -286,7 +288,7 @@ struct ref2lua {
                 binder2lua<T>, nonbinder2lua<T>
             >::type::invoke(L, &input);
         } else {
-            lua_pushlightuserdata(L, (void*)&input);
+            lua_pushlightuserdata(L, adapter::base<T>(&input));
         }
     }
 };
@@ -425,6 +427,12 @@ struct push {
     }
 };
 
+template<> struct push<std::nullptr_t> {
+    static void invoke(lua_State *L, std::nullptr_t) {
+        lua_pushnil(L);
+    }
+};
+
 #define PUSH_VALUE_TO_LUA_STACK(CTYPE,LTYPE,FUNC) \
     template<> struct push<CTYPE> { \
         static void invoke(lua_State *L, CTYPE val) { \
@@ -521,30 +529,6 @@ template<typename T>
 T get(lua_State *L, const char *name){
     lua_getglobal(L, name);
     return pop<T>::invoke(L);
-}
-
-// call lua function
-template<typename... Args>
-void push_args(lua_State *L, Args&&... args) {
-    using swallow = int[];
-    swallow{0, (push<Args>::invoke(L, std::forward<Args>(args)), 0)...};
-}
-
-template<typename RVal, typename... Args>
-RVal call(lua_State *L, const char *name, Args... args) {
-    lua_pushcfunction(L, on_error);
-    int errfunc = lua_gettop(L);
-
-    lua_getglobal(L, name);
-    if (lua_isfunction(L, -1)) {
-        push_args(L, std::forward<Args>(args)...);
-        lua_pcall(L, sizeof...(args), 1, errfunc);
-    } else {
-        print_error(L, "lua::call() attempt to call global '%s' (not a function)", name);
-    }
-
-    lua_remove(L, errfunc);
-    return pop<RVal>::invoke(L);
 }
 
 // variadic template utilities

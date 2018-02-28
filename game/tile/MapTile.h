@@ -19,6 +19,8 @@ public:
     ActorItr MigrateActor(MapTile *tile, ActorItr itr);
     void RemoveActor(ActorItr itr);
 
+    void UpdateActive(int dt);
+
     ActorItr ActorBegin() { return actors_.begin(); }
     ActorItr ActorEnd() { return actors_.end(); }
 

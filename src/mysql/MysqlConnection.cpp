@@ -38,7 +38,7 @@ bool MysqlConnection::Connect(const char *host, unsigned int port,
         WLOG("MysqlConnection: Could not set reconnect mode.");
     }
 
-    const unsigned long flags = CLIENT_FOUND_ROWS;
+    const unsigned long flags = CLIENT_FOUND_ROWS | CLIENT_MULTI_STATEMENTS;
     mysql_ = mysql_real_connect(mysql, host, user, passwd, db, port, nullptr, flags);
     if (mysql_ == nullptr) {
         ELOG("MysqlConnection: Connect failed due to: `%s`.", mysql_error(mysql));
@@ -46,8 +46,8 @@ bool MysqlConnection::Connect(const char *host, unsigned int port,
         return false;
     }
 
-    if (mysql_set_character_set(mysql, "utf8") != 0) {
-        WLOG("MysqlConnection: Could not set utf8 character set.");
+    if (mysql_set_character_set(mysql, "utf8mb4") != 0) {
+        WLOG("MysqlConnection: Could not set utf8mb4 character set.");
     }
 
     return true;

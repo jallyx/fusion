@@ -17,7 +17,7 @@ public:
         return queue_.size();
     }
 
-    void Enqueue(T v) {
+    void Enqueue(const T &v) {
         std::lock_guard<std::mutex> lock(mutex_);
         queue_.push(v);
     }

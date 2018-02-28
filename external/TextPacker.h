@@ -9,6 +9,10 @@ public:
     template <typename T>
     LogPacker &operator<<(T v);
 
+    void PutDelimiter(char delimiter = ',') {
+        stream.seekp(-1, std::ios::cur).put(delimiter);
+    }
+
     std::string str() const { return stream.str(); }
     void str(const std::string &s) { stream.str(s); }
 

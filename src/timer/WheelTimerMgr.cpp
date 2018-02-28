@@ -18,11 +18,17 @@ WheelTimerMgr::WheelTimerMgr(uint64 particle, uint64 curtime)
 
 WheelTimerMgr::~WheelTimerMgr()
 {
+    Clear();
+}
+
+void WheelTimerMgr::Clear()
+{
     while (!push_pool_.empty()) {
         WheelTimer *timer = push_pool_.front();
         push_pool_.pop_front();
-        timer->RemoveRelevance();
         pop_pool_.remove(timer);
+        timer->RemoveRelevance();
+        timer->mgr_ = nullptr;
         delete timer;
     }
     while (!pop_pool_.empty()) {
@@ -100,13 +106,14 @@ void WheelTimerMgr::DynamicMerge()
         timer_list.swap(push_pool_);
     } while (0);
 
-    for (auto iterator = timer_list.begin(); iterator != timer_list.end();) {
-        WheelTimer *timer = *iterator;
+    for (auto itr = timer_list.begin(); itr != timer_list.end();) {
+        WheelTimer *timer = *itr;
         if (timer->OnPrepare()) {
             timer->FixFirstActiveTime();
-            ++iterator;
+            ++itr;
         } else {
-            iterator = timer_list.erase(iterator);
+            itr = timer_list.erase(itr);
+            timer->mgr_ = nullptr;
             delete timer;
         }
     }
@@ -156,16 +163,16 @@ std::list<WheelTimer*> WheelTimerMgr::Activate()
 {
     std::list<WheelTimer*> &active_timer_list = all_timer_[0][pointer_slot_[0]];
     if (!active_timer_list.empty()) {
-        std::list<WheelTimer*>::iterator iterator = active_timer_list.begin();
+        std::list<WheelTimer*>::iterator itr = active_timer_list.begin();
         std::list<WheelTimer*>::iterator anchor = anchor_container_.begin();
-        active_timer_list.splice(iterator, anchor_container_, anchor);
+        active_timer_list.splice(itr, anchor_container_, anchor);
         do {
-            WheelTimer *timer = *iterator;
+            WheelTimer *timer = *itr;
             timer->SetNextActiveTime();
             timer->OnActivate();
-            iterator = std::next(anchor);
-            if (iterator != active_timer_list.end() && *iterator == timer) {
-                active_timer_list.splice(++iterator, active_timer_list, anchor);
+            itr = std::next(anchor);
+            if (itr != active_timer_list.end() && *itr == timer) {
+                active_timer_list.splice(++itr, active_timer_list, anchor);
                 switch (timer->loop_count_) {
                 case 0:
                     break;
@@ -177,7 +184,7 @@ std::list<WheelTimer*> WheelTimerMgr::Activate()
                     break;
                 }
             }
-        } while (iterator != active_timer_list.end());
+        } while (itr != active_timer_list.end());
         anchor_container_.splice(anchor_container_.end(), active_timer_list, anchor);
     }
     return std::move(active_timer_list);

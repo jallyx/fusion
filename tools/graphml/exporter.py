@@ -6,7 +6,7 @@ def to_lua_source(indir, outdir):
         infile = os.path.abspath(os.path.join(indir, filename))
         outfile = os.path.abspath(os.path.join(outdir, filename + ".lua"))
         print "lua %s ..." % infile
-        graphml2lua.dump(graphml2lua.load(infile), outfile)
+        graphml2lua.dump(indir, graphml2lua.load(infile), outfile)
 
     if not os.path.exists(indir):
         return False

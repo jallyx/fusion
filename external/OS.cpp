@@ -2,6 +2,7 @@
 #include <thread>
 
 #if defined(_WIN32)
+    #include <io.h>
     #include <direct.h>
     #pragma comment(lib, "Shlwapi.lib")
 #else
@@ -109,6 +110,15 @@ std::string OS::GetProgramName()
     }
 #endif
     return "";
+}
+
+bool OS::is_file_exist(const char *filepath)
+{
+#if defined(_WIN32)
+    return _access(filepath, 00) == 0;
+#else
+    return access(filepath, F_OK) == 0;
+#endif
 }
 
 bool OS::non_blocking(SOCKET sockfd)

@@ -30,6 +30,29 @@ inline AsyncTask *CreateAsyncTask(const std::function<void()> &work)
     return new Task(work);
 }
 
+inline AsyncTask *CreateAsyncTask(const std::function<void()> &work,
+                                  const std::function<void(AsyncTaskOwner*)> &cb)
+{
+    class Task : public AsyncTask {
+    public:
+        Task(const std::function<void()> &work,
+             const std::function<void(AsyncTaskOwner*)> &cb)
+            : work_(work)
+            , cb_(cb)
+        {}
+    private:
+        virtual void Finish(AsyncTaskOwner *owner) {
+            if (cb_) { cb_(owner); }
+        }
+        virtual void ExecuteInAsync() {
+            if (work_) { work_(); }
+        }
+        const std::function<void()> work_;
+        const std::function<void(AsyncTaskOwner*)> cb_;
+    };
+    return new Task(work, cb);
+}
+
 template <typename T, typename... Args>
 inline AsyncTask *CreateAsyncTask(const std::function<void(T&)> &work,
                                   const std::function<void(AsyncTaskOwner*, T&)> &cb,

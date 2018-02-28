@@ -68,15 +68,17 @@ public:
         return *this;
     }
 
+    INetStream &operator<<(bool v)
+    { v=(*(u8*)(&v))!=0; WriteStream(&v, sizeof(v)); return *this; }
+    INetStream &operator>>(bool &v)
+    { ReadStream(&v, sizeof(v)); v=(*(u8*)(&v))!=0; return *this; }
+
 #define STREAM_CONVERTER(TYPE) \
     INetStream &operator<<(TYPE v) \
     { WriteStream(&v, sizeof(v)); return *this; } \
     INetStream &operator>>(TYPE &v) \
     { ReadStream(&v, sizeof(v)); return *this; }
     STREAM_CONVERTER(char)
-    STREAM_CONVERTER(bool)
-    STREAM_CONVERTER(float)
-    STREAM_CONVERTER(double)
     STREAM_CONVERTER(int8)
     STREAM_CONVERTER(uint8)
     STREAM_CONVERTER(int16)
@@ -85,7 +87,18 @@ public:
     STREAM_CONVERTER(uint32)
     STREAM_CONVERTER(int64)
     STREAM_CONVERTER(uint64)
-#undef BUFFER_CONVERTER
+#undef STREAM_CONVERTER
+
+#define STREAM_CONVERTER(TYPE) \
+    INetStream &operator<<(TYPE v) { \
+        if (std::isnan(v)) { THROW_EXCEPTION(NetStreamException()); } \
+        WriteStream(&v, sizeof(v)); return *this; } \
+    INetStream &operator>>(TYPE &v) { \
+        ReadStream(&v, sizeof(v)); if (std::isnan(v)) { \
+        THROW_EXCEPTION(NetStreamException()); } return *this; }
+    STREAM_CONVERTER(float)
+    STREAM_CONVERTER(double)
+#undef STREAM_CONVERTER
 
     INetStream &operator<<(const std::string &s) {
         Write<uint16>((uint16)s.size());
@@ -102,6 +115,11 @@ public:
         size_t size = strlen(s); Write<uint16>((uint16)size);
         if (size != 0) WriteStream(s, size);
         return *this;
+    }
+
+    void WriteString(const void *data, size_t size) {
+        Write<uint16>((uint16)size);
+        if (size != 0) WriteStream(data, size);
     }
 
     template <typename T> void Write(T v) {

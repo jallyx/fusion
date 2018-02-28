@@ -1,7 +1,7 @@
 #include "AIObject.h"
 #include "AIActionNode.h"
 #include "AIControlNode.h"
-#include "lua/LuaTable.h"
+#include "lua/LuaFunc.h"
 #include "lua/LuaMgr.h"
 #include "Exception.h"
 
@@ -20,7 +20,8 @@ void AIObject::BuildBehaviorTree(lua_State *L, const char *aifile)
         &behavior_tree_, std::placeholders::_1, std::placeholders::_2);
 
     LuaMgr::DoFileEnv(L, aifile);
-    lua::call<void, const LuaRef &>(L, "BuildBehaviorTree", blackboard.object_cache());
+    LuaFunc(L, "BuildBehaviorTree", true).
+        Call<void, const LuaRef &>(blackboard.object_cache());
 }
 
 void AIObject::RunBehaviorTree()
@@ -72,11 +73,6 @@ void AIObject::InitBehaviorTree(lua_State *L)
     lua::class_add<AIActionNode>(L, "AIActionNode");
     lua::class_inh<AIActionNode, AINodeBase>(L);
 
-    lua::class_add<AIInstructionNode>(L, "AIInstructionNode");
-    lua::class_con<AIInstructionNode>(L, lua::constructor<AIInstructionNode, AIBlackboard&>);
-    lua::class_def<AIInstructionNode>(L, "SetInstructions", &AIInstructionNode::SetInstructions);
-    lua::class_inh<AIInstructionNode, AIActionNode>(L);
-
     lua::class_add<AIScriptableNode>(L, "AIScriptableNode");
     lua::class_con<AIScriptableNode>(L, lua::constructor<AIScriptableNode, AIBlackboard&>);
     lua::class_def<AIScriptableNode>(L, "SetInternalPrecondition", &AIScriptableNode::SetInternalPrecondition);
@@ -93,23 +89,4 @@ void AIObject::InitBehaviorTree(lua_State *L)
     lua::class_add<AIPrioritySelector>(L, "AIPrioritySelector");
     lua::class_con<AIPrioritySelector>(L, lua::constructor<AIPrioritySelector, AIBlackboard&>);
     lua::class_inh<AIPrioritySelector, AIControlNode>(L);
-
-    lua::class_add<AISequenceSelector>(L, "AISequenceSelector");
-    lua::class_con<AISequenceSelector>(L, lua::constructor<AISequenceSelector, AIBlackboard&>);
-    lua::class_inh<AISequenceSelector, AIControlNode>(L);
-
-    lua::class_add<AIWeightedSelector>(L, "AIWeightedSelector");
-    lua::class_con<AIWeightedSelector>(L, lua::constructor<AIWeightedSelector, AIBlackboard&>);
-    lua::class_def<AIWeightedSelector>(L, "AppendChildNode", &AIWeightedSelector::AppendChildNode);
-    lua::class_inh<AIWeightedSelector, AIControlNode>(L);
-
-    lua::class_add<AISequenceNode>(L, "AISequenceNode");
-    lua::class_con<AISequenceNode>(L, lua::constructor<AISequenceNode, AIBlackboard&>);
-    lua::class_def<AISequenceNode>(L, "SetLoopParams", &AISequenceNode::SetLoopParams);
-    lua::class_inh<AISequenceNode, AIControlNode>(L);
-
-    lua::class_add<AIParallelNode>(L, "AIParallelNode");
-    lua::class_con<AIParallelNode>(L, lua::constructor<AIParallelNode, AIBlackboard&>);
-    lua::class_def<AIParallelNode>(L, "SetParallelParams", &AIParallelNode::SetParallelParams);
-    lua::class_inh<AIParallelNode, AIControlNode>(L);
 }

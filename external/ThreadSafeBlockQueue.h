@@ -5,7 +5,7 @@
 #include <queue>
 
 // be useful for:
-// multi producer, single consumer
+// multi producer, single consumer.
 
 template <typename T>
 class ThreadSafeBlockQueue
@@ -15,7 +15,7 @@ public:
         : enptr_(queue_)
     {}
 
-    void Enqueue(T v) {
+    void Enqueue(const T &v) {
         std::lock_guard<std::mutex> lock(mutex_);
         (*enptr_).push(v);
         cv_.notify_one();

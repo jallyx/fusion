@@ -21,6 +21,8 @@ public:
     void Push(WheelTimer *timer, uint64 first_active_time = 0);
     void Pop(WheelTimer *timer);
 
+    void Clear();
+
 private:
     void DynamicMerge();
     void DynamicRemove();

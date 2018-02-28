@@ -1,20 +1,19 @@
 #include "Connection.h"
 #include "ConnectionManager.h"
-#include "SendBuffer.h"
+#include "Session.h"
 #include "System.h"
 #include "Logger.h"
-#include <functional>
 
 Connection::Connection(ConnectionManager &manager, Session &session)
 : manager_(manager)
 , session_(session)
 , is_active_(false)
+, strand_(manager.io_service())
 , resolver_(manager.io_service())
 , sock_(manager.io_service())
 , port_(0)
 , is_connected_(false)
-, send_buffer_(nullptr)
-, recv_buffer_(MAX_NET_PACKET_SIZE)
+, recv_buffer_(MAX_NET_PACKET_SIZE+1)
 , deflate_stream_(nullptr)
 , inflate_stream_(nullptr)
 , final_send_buffer_(nullptr)
@@ -30,52 +29,39 @@ Connection::Connection(ConnectionManager &manager, Session &session)
 Connection::~Connection()
 {
     Close();
-    SAFE_DELETE(send_buffer_);
     SAFE_DELETE(deflate_stream_);
     SAFE_DELETE(inflate_stream_);
     SAFE_DELETE(final_send_buffer_);
     SAFE_DELETE(final_recv_buffer_);
 }
 
-template <>
-Session::ISendBuffer *Connection::GetSendBuffer() const
-{
-    return send_buffer_;
-}
-
-bool Connection::IsSendBufferEmpty() const
+bool Connection::HasSendDataAwaiting() const
 {
     if (final_send_buffer_ && !final_send_buffer_->IsEmpty())
-        return false;
-    if (!send_buffer_->IsEmpty())
-        return false;
-    return true;
+        return true;
+    if (send_buffer_.HasSendDataAvail())
+        return true;
+    return false;
+}
+
+size_t Connection::GetSendDataSize() const
+{
+    return (final_send_buffer_ ? final_send_buffer_->GetReadableSpace() : 0) +
+        send_buffer_.GetDataSize();
 }
 
 void Connection::Init()
 {
-    send_buffer_ = new SendBuffer();
     if (session_.is_deflate_packet()) {
         deflate_stream_ = new zlib::DeflateStream();
-        final_send_buffer_ = new CircularBuffer(MAX_NET_PACKET_SIZE);
+        final_send_buffer_ = new CircularBuffer(MAX_NET_PACKET_SIZE+1);
     }
     if (session_.is_inflate_packet()) {
         inflate_stream_ = new zlib::InflateStream();
-        final_recv_buffer_ = new CircularBuffer(MAX_NET_PACKET_SIZE);
+        final_recv_buffer_ = new CircularBuffer(MAX_NET_PACKET_SIZE+1);
     }
 
     session_.SetConnection(shared_from_this());
-}
-
-void Connection::Reset()
-{
-    Close();
-    ClearRecvData();
-    ClearSendData();
-    is_reading_.clear();
-    is_writing_.clear();
-    last_recv_data_time_ = GET_SYS_TIME;
-    last_send_data_time_ = GET_SYS_TIME;
 }
 
 void Connection::Close()
@@ -93,7 +79,7 @@ void Connection::Close()
     }
 }
 
-void Connection::SetSocket(const asio::ip::tcp::socket::protocol_type &protocol, int socket)
+void Connection::SetSocket(const asio::ip::tcp::socket::protocol_type &protocol, SOCKET socket)
 {
     is_active_ = is_connected_ = true;
     sock_.assign(protocol, socket);
@@ -109,24 +95,29 @@ void Connection::AsyncConnect(const std::string &address, const std::string &por
     port_ = atoi(port.c_str());
 
     asio::ip::tcp::resolver::query query(address, port);
-    resolver_.async_resolve(query,
+    resolver_.async_resolve(query, strand_.wrap(
         std::bind(&Connection::OnResolveComplete, shared_from_this(),
-                  std::placeholders::_1, std::placeholders::_2));
+                  std::placeholders::_1, std::placeholders::_2)));
 }
 
 void Connection::PostReadRequest()
 {
     if (!is_reading_.test_and_set()) {
-        sock_.get_io_service().dispatch(
-            std::bind(&Connection::StartNextRead, shared_from_this()));
+        strand_.dispatch(std::bind(&Connection::StartNextRead, shared_from_this()));
     }
 }
 
 void Connection::PostWriteRequest()
 {
     if (IsConnected() && !is_writing_.test_and_set()) {
-        sock_.get_io_service().dispatch(
-            std::bind(&Connection::StartNextWrite, shared_from_this()));
+        strand_.dispatch(std::bind(&Connection::StartNextWrite, shared_from_this()));
+    }
+}
+
+void Connection::PostCloseRequest()
+{
+    if (IsActive()) {
+        strand_.dispatch(std::bind(&Connection::Close, shared_from_this()));
     }
 }
 
@@ -134,11 +125,15 @@ void Connection::StartNextRead()
 {
     TRY_BEGIN {
 
+        if (!IsActive()) {
+            return;
+        }
+
         size_t size = 0;
         char *buffer = GetRecvDataBuffer(size);
-        sock_.async_read_some(asio::buffer(buffer, size),
+        sock_.async_read_some(asio::buffer(buffer, size), strand_.wrap(
             std::bind(&Connection::OnReadComplete, shared_from_this(),
-                      std::placeholders::_1, buffer, std::placeholders::_2));
+                      std::placeholders::_1, buffer, std::placeholders::_2)));
 
     } TRY_END
     CATCH_BEGIN(const asio::system_error &e) {
@@ -160,21 +155,20 @@ void Connection::StartNextWrite()
 {
     TRY_BEGIN {
 
+        if (!IsActive()) {
+            return;
+        }
+
         size_t size = 0;
         const char *buffer = PreprocessAndGetSendDataBuffer(size);
         if (buffer != nullptr && size != 0) {
-            sock_.async_write_some(asio::buffer(buffer, size),
+            sock_.async_write_some(asio::buffer(buffer, size), strand_.wrap(
                 std::bind(&Connection::OnWriteComplete, shared_from_this(),
-                          std::placeholders::_1, buffer, std::placeholders::_2));
+                          std::placeholders::_1, buffer, std::placeholders::_2)));
         } else {
             is_writing_.clear();
-            while (IsActive() && !IsSendBufferEmpty() && !is_writing_.test_and_set()) {
-                if (IsSendBufferEmpty()) {
-                    is_writing_.clear();
-                } else {
-                    StartNextWrite();
-                    break;
-                }
+            if (HasSendDataAwaiting() && !is_writing_.test_and_set()) {
+                StartNextWrite();
             }
         }
 
@@ -210,9 +204,9 @@ void Connection::OnResolveComplete(const asio::error_code &ec, asio::ip::tcp::re
 
         last_recv_data_time_ = GET_SYS_TIME;
         last_send_data_time_ = GET_SYS_TIME;
-        sock_.async_connect(*itr,
+        sock_.async_connect(*itr, strand_.wrap(
             std::bind(&Connection::OnConnectComplete, shared_from_this(),
-                      std::placeholders::_1));
+                      std::placeholders::_1)));
 
     } TRY_END
     CATCH_BEGIN(const asio::system_error &e) {
@@ -377,13 +371,16 @@ const char *Connection::GetSendDataBuffer(size_t &size)
         size = final_send_buffer_->GetContiguiousReadableSpace();
         return final_send_buffer_->GetContiguiousReadableBuffer();
     } else {
-        return send_buffer_->GetSendDataBuffer(size);
+        return send_buffer_.GetSendDataBuffer(size);
     }
 }
 
 const char *Connection::PreprocessAndGetSendDataBuffer(size_t &size)
 {
-    PreprocessSendData();
+    if (session_.is_deflate_packet()) {
+        PreprocessSendData();
+    }
+
     return GetSendDataBuffer(size);
 }
 
@@ -396,12 +393,23 @@ void Connection::OnRecvDataCallback(const char *buffer, size_t size)
     }
 
     recv_buffer_.IncrementContiguiousWritten(size);
-    PreprocessRecvData();
 
-    INetPacket *pck = nullptr;
-    while (IsActive() && (pck = ReadPacketFromBuffer()) != nullptr) {
-        session_.PushRecvPacket(pck);
-    }
+    do {
+        if (session_.is_inflate_packet()) {
+            PreprocessRecvData();
+        }
+        while (IsActive()) {
+            INetPacket *pck = ReadPacketFromBuffer();
+            if (pck != nullptr) {
+                session_.PushRecvPacket(pck);
+            } else {
+                break;
+            }
+        }
+        if (!session_.is_inflate_packet()) {
+            break;
+        }
+    } while (IsActive() && !recv_buffer_.IsEmpty());
 }
 
 void Connection::OnSendDataCallback(const char *buffer, size_t size)
@@ -415,16 +423,12 @@ void Connection::OnSendDataCallback(const char *buffer, size_t size)
     if (final_send_buffer_ != nullptr) {
         final_send_buffer_->IncrementContiguiousRead(size);
     } else {
-        send_buffer_->RemoveSendData(size);
+        send_buffer_.RemoveSendData(size);
     }
 }
 
 void Connection::PreprocessRecvData()
 {
-    if (inflate_stream_ == nullptr || final_recv_buffer_ == nullptr) {
-        return;
-    }
-
     while (IsActive() && !recv_buffer_.IsEmpty() && !final_recv_buffer_->IsFull()) {
         size_t inlen = recv_buffer_.GetContiguiousReadableSpace();
         const char *in = recv_buffer_.GetContiguiousReadableBuffer();
@@ -445,41 +449,33 @@ void Connection::PreprocessRecvData()
 
 void Connection::PreprocessSendData()
 {
-    if (deflate_stream_ == nullptr || final_send_buffer_ == nullptr) {
-        return;
-    }
-
-    while (IsActive() && !final_send_buffer_->IsFull()) {
+    while (IsActive() && send_buffer_.HasSendDataAvail() && !final_send_buffer_->IsFull()) {
         size_t inlen = 0;
-        const char *in = send_buffer_->GetSendDataBuffer(inlen);
-        if (in != nullptr && inlen != 0) {
-            size_t outlen = final_send_buffer_->GetContiguiousWritableSpace();
-            char *out = final_send_buffer_->GetContiguiousWritableBuffer();
-            if (deflate_stream_->Deflate(in, inlen, out, outlen)) {
-                if (inlen != 0) {
-                    send_buffer_->RemoveSendData(inlen);
-                }
-                if (outlen != 0) {
-                    final_send_buffer_->IncrementContiguiousWritten(outlen);
-                }
-                is_residual_send_data_ = true;
-            } else {
-                THROW_EXCEPTION(SendDataException());
+        const char *in = send_buffer_.GetSendDataBuffer(inlen);
+        size_t outlen = final_send_buffer_->GetContiguiousWritableSpace();
+        char *out = final_send_buffer_->GetContiguiousWritableBuffer();
+        if (deflate_stream_->Deflate(in, inlen, out, outlen)) {
+            if (inlen != 0) {
+                send_buffer_.RemoveSendData(inlen);
             }
+            if (outlen != 0) {
+                final_send_buffer_->IncrementContiguiousWritten(outlen);
+            }
+            is_residual_send_data_ = true;
         } else {
-            break;
+            THROW_EXCEPTION(SendDataException());
         }
     }
 
     while (is_residual_send_data_ && IsActive() && !final_send_buffer_->IsFull()) {
-        size_t space = 0;
-        size_t outlen = space = final_send_buffer_->GetContiguiousWritableSpace();
+        size_t availen = final_send_buffer_->GetContiguiousWritableSpace();
         char *out = final_send_buffer_->GetContiguiousWritableBuffer();
+        auto outlen = availen;
         if (deflate_stream_->Flush(out, outlen)) {
             if (outlen != 0) {
                 final_send_buffer_->IncrementContiguiousWritten(outlen);
             }
-            if (outlen < space) {
+            if (outlen < availen) {
                 is_residual_send_data_ = false;
             }
         } else {
@@ -496,29 +492,6 @@ void Connection::RenewRemoteEndpoint()
         addr_ = endpoint.address().to_string();
         port_ = endpoint.port();
     }
-}
-
-void Connection::ClearRecvData()
-{
-    recv_buffer_.Reset();
-    if (final_recv_buffer_ != nullptr) {
-        final_recv_buffer_->Reset();
-    }
-    if (inflate_stream_ != nullptr) {
-        inflate_stream_->Reset();
-    }
-}
-
-void Connection::ClearSendData()
-{
-    send_buffer_->ClearData();
-    if (final_send_buffer_ != nullptr) {
-        final_send_buffer_->Reset();
-    }
-    if (deflate_stream_ != nullptr) {
-        deflate_stream_->Reset();
-    }
-    is_residual_send_data_ = false;
 }
 
 void Connection::InitSendBufferPool()

@@ -30,5 +30,6 @@ public:
 
 private:
     class Trigger;
+    class TriggerByMonthly;
     std::multimap<uint32, Trigger*> triggers_;
 };

@@ -10,7 +10,6 @@ Session::Session(bool isDeflatePacket, bool isInflatePacket, bool isRapidMode)
 , is_rapid_mode_(isRapidMode)
 , status_(Idle)
 , manager_(nullptr)
-, send_buffer_(nullptr)
 , event_observer_(nullptr)
 , is_overstocked_packet_(false)
 , overflow_packet_count_(0)
@@ -75,10 +74,9 @@ void Session::Update()
     SAFE_DELETE(pck);
 }
 
-void Session::SetConnection(std::shared_ptr<Connection> &&connPtr)
+void Session::SetConnection(std::shared_ptr<Connection> &&conn)
 {
-    connection_ = std::move(connPtr);
-    send_buffer_ = connection_->GetSendBuffer<ISendBuffer>();
+    connection_ = std::move(conn);
 }
 
 const std::shared_ptr<Connection> &Session::GetConnection() const
@@ -86,14 +84,31 @@ const std::shared_ptr<Connection> &Session::GetConnection() const
     return connection_;
 }
 
-bool Session::IsMonopolizeConnection() const
-{
-    return connection_.unique();
-}
-
 void Session::DeleteObject()
 {
     delete this;
+}
+
+void Session::Disconnect()
+{
+    if (connection_ && connection_->IsActive()) {
+        connection_->PostCloseRequest();
+    }
+}
+
+bool Session::IsIndependent() const
+{
+    return !connection_ || connection_.unique();
+}
+
+bool Session::HasSendDataAwaiting() const
+{
+    return connection_->HasSendDataAwaiting();
+}
+
+size_t Session::GetSendDataSize() const
+{
+    return connection_->GetSendDataSize();
 }
 
 const std::string &Session::GetHost() const
@@ -190,7 +205,7 @@ void Session::PushSendPacket(const INetPacket &pck)
         if (pck.GetReadableSize() > INetPacket::MAX_BUFFER_SIZE) {
             PushSendOverflowPacket(pck);
         } else {
-            send_buffer_->WritePacket(pck);
+            connection_->GetSendBuffer().WritePacket(pck);
         }
         connection_->PostWriteRequest();
         last_send_pck_time_ = GET_SYS_TIME;
@@ -200,7 +215,7 @@ void Session::PushSendPacket(const INetPacket &pck)
 void Session::PushSendPacket(const char *data, size_t size)
 {
     if (IsActive() && connection_) {
-        send_buffer_->WritePacket(data, size);
+        connection_->GetSendBuffer().WritePacket(data, size);
         connection_->PostWriteRequest();
         last_send_pck_time_ = GET_SYS_TIME;
     }
@@ -209,7 +224,7 @@ void Session::PushSendPacket(const char *data, size_t size)
 void Session::PushSendPacket(const INetPacket &pck, const INetPacket &data)
 {
     if (IsActive() && connection_) {
-        send_buffer_->WritePacket(pck, data);
+        connection_->GetSendBuffer().WritePacket(pck, data);
         connection_->PostWriteRequest();
         last_send_pck_time_ = GET_SYS_TIME;
     }
@@ -218,7 +233,7 @@ void Session::PushSendPacket(const INetPacket &pck, const INetPacket &data)
 void Session::PushSendPacket(const INetPacket &pck, const char *data, size_t size)
 {
     if (IsActive() && connection_) {
-        send_buffer_->WritePacket(pck, data, size);
+        connection_->GetSendBuffer().WritePacket(pck, data, size);
         connection_->PostWriteRequest();
         last_send_pck_time_ = GET_SYS_TIME;
     }
@@ -266,7 +281,7 @@ void Session::PushSendOverflowPacket(const INetPacket &pck)
     auto send = [=](const INetPacket &pck, const INetPacket &data, size_t &offset)->bool {
         const size_t packet_space_size = INetPacket::MAX_BUFFER_SIZE - pck.GetTotalSize();
         const size_t length = std::min(data.GetTotalSize() - offset, packet_space_size);
-        send_buffer_->WritePacket(pck, data.GetBuffer() + offset, length);
+        connection_->GetSendBuffer().WritePacket(pck, data.GetBuffer() + offset, length);
         offset += length;
         return length >= packet_space_size;
     };

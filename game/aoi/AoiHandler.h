@@ -15,9 +15,15 @@ public:
     void MoveActor(AoiActor *actor);
     void RemoveActor(AoiActor *actor);
 
+    void ReloadActorRadius(AoiActor *actor);
+
     void ReloadActorObserver(AoiActor *actor) const;
     void ReloadActorSubject(AoiActor *actor) const;
+    void ReloadActorStatus(AoiActor *actor) const;
+
     void ReloadAllActorSubject() const;
+
+    void CollateAllActorMarker() const;
 
 private:
     static float GetNodeValue(AoiActor *actor, int axis, int anchor);

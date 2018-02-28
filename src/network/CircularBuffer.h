@@ -3,13 +3,14 @@
 #include <stddef.h>
 #include "noncopyable.h"
 
+// be useful for:
+// single producer, single consumer.
+
 class CircularBuffer : public noncopyable
 {
 public:
     CircularBuffer(size_t size);
     ~CircularBuffer();
-
-    void Reset();
 
     bool IsEmpty() const;
     bool IsFull() const;
@@ -35,6 +36,6 @@ private:
     char * const base_;
     size_t const size_;
 
-    char *inptr_;
-    const char *outptr_;
+    size_t in_;
+    size_t out_;
 };

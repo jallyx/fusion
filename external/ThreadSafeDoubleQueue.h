@@ -5,7 +5,7 @@
 #include "ThreadSafePool.h"
 
 // be useful for:
-// multi producer, single consumer
+// multi producer, single consumer.
 
 template <typename T, size_t N>
 class ThreadSafeDoubleQueue
@@ -37,7 +37,7 @@ public:
         FreeBuffer(out_buffer_);
     }
 
-    void Enqueue(T v) {
+    void Enqueue(const T &v) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (in_buffer_->IsFull()) {
             in_buffers_.push(in_buffer_);

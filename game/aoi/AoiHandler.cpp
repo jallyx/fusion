@@ -261,6 +261,84 @@ void AoiHandler::RemoveActor(AoiActor *actor)
     itrs_.erase(itr);
 }
 
+void AoiHandler::ReloadActorRadius(AoiActor *actor)
+{
+    auto itr = itrs_.find(actor);
+    if (itr == itrs_.end()) {
+        return;
+    }
+
+    auto Relocate = [actor](AoiActor::Axis axis,
+        std::list<Node> &link, std::list<Node>::iterator (&itrs)[N])
+    {
+        if (actor->radius() != 0) {
+            if (itrs[Begin]->anchor != Begin) {
+                itrs[Begin] = link.insert(itrs[Begin],
+                    Node{actor, Begin, itrs[Begin]->value});
+                itrs[End] = link.insert(std::next(itrs[End]),
+                    Node{actor, End, itrs[End]->value});
+            }
+            do {
+                std::list<Node>::iterator itr = itrs[Begin];
+                Node &b_node = *itr;
+                const float b_node_value = b_node.value;
+                b_node.value = GetNodeValue(actor, axis, Begin);
+                if (b_node_value > b_node.value) {
+                    for (; itr != link.begin() &&
+                           std::prev(itr)->value > b_node.value; --itr) {
+                        continue;
+                    }
+                    if (itr != itrs[Begin]) {
+                        link.splice(itr, link, itrs[Begin]);
+                    }
+                } else if (b_node_value < b_node.value) {
+                    for (++itr; itr != link.end() &&
+                                itr->value < b_node.value; ++itr) {
+                        continue;
+                    }
+                    if (std::prev(itr) != itrs[Begin]) {
+                        link.splice(itr, link, itrs[Begin]);
+                    }
+                }
+            } while (0);
+            do {
+                std::list<Node>::iterator itr = itrs[End];
+                Node &e_node = *itr;
+                const float e_node_value = e_node.value;
+                e_node.value = GetNodeValue(actor, axis, End);
+                if (e_node_value > e_node.value) {
+                    for (; itr != link.begin() &&
+                           std::prev(itr)->value > e_node.value; --itr) {
+                        continue;
+                    }
+                    if (itr != itrs[End]) {
+                        link.splice(itr, link, itrs[End]);
+                    }
+                } else if (e_node_value < e_node.value) {
+                    for (++itr; itr != link.end() &&
+                                itr->value < e_node.value; ++itr) {
+                        continue;
+                    }
+                    if (std::prev(itr) != itrs[End]) {
+                        link.splice(itr, link, itrs[End]);
+                    }
+                }
+            } while (0);
+        } else {
+            if (itrs[Begin]->anchor == Begin) {
+                link.erase(itrs[Begin]);
+                link.erase(itrs[End]);
+                itrs[Begin] = itrs[End] = itrs[Center];
+            }
+        }
+    };
+
+    Iterator &itrs = itr->second;
+    Relocate(AoiActor::X, x_link_, itrs.xitr);
+    Relocate(AoiActor::Z, z_link_, itrs.zitr);
+    ReloadActorSubject(actor);
+}
+
 void AoiHandler::ReloadActorObserver(AoiActor *actor) const
 {
     auto itr = itrs_.find(actor);
@@ -308,10 +386,23 @@ void AoiHandler::ReloadActorSubject(AoiActor *actor) const
     Reload(itrs.xitr);
 }
 
+void AoiHandler::ReloadActorStatus(AoiActor *actor) const
+{
+    ReloadActorObserver(actor);
+    ReloadActorSubject(actor);
+}
+
 void AoiHandler::ReloadAllActorSubject() const
 {
     for (auto &pair : itrs_) {
         ReloadActorSubject(pair.first);
+    }
+}
+
+void AoiHandler::CollateAllActorMarker() const
+{
+    for (auto &pair : itrs_) {
+        pair.first->CollateMarker();
     }
 }
 

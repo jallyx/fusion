@@ -1,12 +1,13 @@
 #include "AoiActor.h"
 #include "AoiHandler.h"
 #include "Macro.h"
+#include "InlineFuncs.h"
 #include <assert.h>
 #include <algorithm>
 
-AoiActor::AoiActor(Type type, bool strict)
+AoiActor::AoiActor(Type type, int flags)
 : type_(type)
-, strict_(strict)
+, flags_(flags)
 , handler_(nullptr)
 , x_(0)
 , z_(0)
@@ -20,7 +21,7 @@ AoiActor::~AoiActor()
     assert(handler_ == nullptr && "please popup before destroy.");
 }
 
-void AoiActor::SetAttribute(float r)
+void AoiActor::SetRadius(float r)
 {
     r_ = r;
 }
@@ -30,13 +31,13 @@ void AoiActor::SetLimits(const size_t (&limits)[N])
     std::copy_n(limits, ARRAY_SIZE(limits), limits_);
 }
 
-void AoiActor::CheckMarker()
+void AoiActor::CollateMarker()
 {
     CheckPossible();
     for (int type = 0; type < N; ++type) {
         CheckOverflow(type);
     }
-    if (strict()) {
+    if (BIT_ISSET(flags(), PRECISE)) {
         for (int type = 0; type < N; ++type) {
             CheckMarker(type);
         }
@@ -58,30 +59,23 @@ void AoiActor::OnMove(float x, float z)
 
 void AoiActor::OnPopup()
 {
-    for (auto actor : holder_) {
-        actor->RemoveSubject(this);
-    }
-    holder_.clear();
-    for (auto &entities : watcher_) {
-        entities.clear();
+    for (auto itr = holder_.begin(); itr != holder_.end();) {
+        (*itr++)->LeaveArea(this);
     }
 
     for (auto &entities : marker_) {
-        for (auto actor : entities) {
-            actor->RemoveObserver(this);
+        for (auto itr = entities.begin(); itr != entities.end();) {
+            this->LeaveArea(*itr++);
         }
-        entities.clear();
     }
     for (auto &entities : overflow_) {
-        for (auto actor : entities) {
-            actor->RemoveObserver(this);
+        for (auto itr = entities.begin(); itr != entities.end();) {
+            this->LeaveArea(*itr++);
         }
-        entities.clear();
     }
-    for (auto actor : possible_) {
-        actor->RemoveObserver(this);
+    for (auto itr = possible_.begin(); itr != possible_.end();) {
+        this->LeaveArea(*itr++);
     }
-    possible_.clear();
 
     handler_->RemoveActor(this);
     handler_ = nullptr;
@@ -155,8 +149,12 @@ void AoiActor::AddSubject(AoiActor *actor)
 
 bool AoiActor::IsInteresting(AoiActor *actor) const
 {
-    if (actor == this) return false;
     if (r_ == 0) return false;
+    if (actor == this) return false;
+    if (BIT_ISSET(actor->flags(), VACUOUS))
+        return false;
+    if (BIT_ISSET(actor->flags(), SPAWN))
+        return BIT_ISSET(flags(), VIEWER);
     return TestInteresting(actor);
 }
 
@@ -240,7 +238,11 @@ void AoiActor::AddMarker(AoiActor *actor)
 {
     if (marker_[actor->type()].insert(actor).second) {
         actor->AddWatcher(this);
-        this->OnAddMarker(actor);
+        if (!BIT_ISSET(actor->flags(), SPAWN)) {
+            this->OnAddMarker(actor);
+        } else {
+            actor->OnSpawn();
+        }
     }
 }
 
@@ -248,7 +250,9 @@ void AoiActor::RemoveMarker(AoiActor *actor)
 {
     if (marker_[actor->type()].erase(actor) != 0) {
         actor->RemoveWatcher(this);
-        this->OnRemoveMarker(actor);
+        if (!BIT_ISSET(actor->flags(), SPAWN)) {
+            this->OnRemoveMarker(actor);
+        }
     }
 }
 

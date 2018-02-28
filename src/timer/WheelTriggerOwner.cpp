@@ -1,6 +1,8 @@
 #include "WheelTriggerOwner.h"
 #include "WheelTrigger.h"
 #include "WheelTimerMgr.h"
+#include "System.h"
+#include "Logger.h"
 
 class WheelTriggerOwner::Trigger : public WheelTrigger
 {
@@ -68,6 +70,39 @@ private:
     std::weak_ptr<WheelTriggerOwner> owner_;
 };
 
+class WheelTriggerOwner::TriggerByMonthly : public WheelTriggerOwner::Trigger
+{
+public:
+    TriggerByMonthly(WheelTriggerOwner *owner, TriggerPoint trigger_point,
+                     const std::function<void()> &cb, uint32 type, uint32 repeats)
+        : Trigger(owner, MAX_CYCLE_MONTHLY
+        , CalcNextTriggerPointTimeByMonthly(trigger_point), cb, type, repeats)
+        , trigger_point_(trigger_point)
+    {
+    }
+
+protected:
+    virtual bool OnPrepare()
+    {
+        if (GetCurrentTickTime() > uint64(GET_UNIX_TIME)) {
+            WLOG("CreateTriggerByMonthly is invalid.");
+            return false;
+        }
+        WheelTriggerOwner::Trigger::OnPrepare();
+        return true;
+    }
+
+    virtual void OnActivate()
+    {
+        set_point_time(CalcNextTriggerPointTimeByMonthly(trigger_point_));
+        SetNextActiveTime(point_time());
+        Trigger::OnActivate();
+    }
+
+private:
+    const TriggerPoint trigger_point_;
+};
+
 
 WheelTriggerOwner::WheelTriggerOwner()
 {
@@ -82,16 +117,32 @@ void WheelTriggerOwner::CreateTrigger(
     TriggerCycle trigger_cycle, TriggerPoint trigger_point,
     const std::function<void()> &cb, uint32 type, uint32 repeats)
 {
-    GetCacheWheelTimerMgr()->Push(new Trigger(
-        this, trigger_cycle, trigger_point, cb, type, repeats));
+    switch (trigger_cycle) {
+    case ByMonthlyTrigger:
+        GetCacheWheelTimerMgr()->Push(new TriggerByMonthly(
+            this, trigger_point, cb, type, repeats));
+        break;
+    default:
+        GetCacheWheelTimerMgr()->Push(new Trigger(
+            this, trigger_cycle, trigger_point, cb, type, repeats));
+        break;
+    }
 }
 
 void WheelTriggerOwner::CreateTriggerX(
     TriggerCycle trigger_cycle, TriggerPoint trigger_point,
     const std::function<void()> &cb, uint32 repeats)
 {
-    GetCacheWheelTimerMgr()->Push(new Trigger(
-        this, trigger_cycle, trigger_point, cb, ~0, repeats));
+    switch (trigger_cycle) {
+    case ByMonthlyTrigger:
+        GetCacheWheelTimerMgr()->Push(new TriggerByMonthly(
+            this, trigger_point, cb, ~0, repeats));
+        break;
+    default:
+        GetCacheWheelTimerMgr()->Push(new Trigger(
+            this, trigger_cycle, trigger_point, cb, ~0, repeats));
+        break;
+    }
 }
 
 void WheelTriggerOwner::CreateTrigger(

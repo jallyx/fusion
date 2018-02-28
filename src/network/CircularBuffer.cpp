@@ -4,10 +4,12 @@
 #include "Debugger.h"
 
 CircularBuffer::CircularBuffer(size_t size)
-: base_(new char[size + 1])
-, size_(size + 1)
+: base_(new char[size])
+, size_(size)
+, in_(0)
+, out_(0)
 {
-    outptr_ = inptr_ = base_;
+    assert((size & (size - 1)) == 0);
 }
 
 CircularBuffer::~CircularBuffer()
@@ -15,81 +17,74 @@ CircularBuffer::~CircularBuffer()
     delete [] base_;
 }
 
-void CircularBuffer::Reset()
-{
-    outptr_ = inptr_ = base_;
-}
-
 bool CircularBuffer::IsEmpty() const
 {
-    return outptr_ == inptr_;
+    return in_ == out_;
 }
 
 bool CircularBuffer::IsFull() const
 {
-    return outptr_ == inptr_ + 1 || outptr_ + size_ == inptr_ + 1;
+    return in_ == out_ + size_;
 }
 
 size_t CircularBuffer::GetWritableSpace() const
 {
-    return size_ - GetReadableSpace() - 1;
+    return out_ + size_ - in_;
 }
 
 size_t CircularBuffer::GetReadableSpace() const
 {
-    if (inptr_ >= outptr_)
-        return inptr_ - outptr_;
-    return size_ + inptr_ - outptr_;
+    return in_ - out_;
 }
 
 size_t CircularBuffer::Write(const char *data, size_t size)
 {
-    size_t offset = 0;
-    for (auto i = 0; i < 2 && offset < size; ++i) {
+    size_t n = 0;
+    for (auto i = 0; i < 2 && n < size; ++i) {
         const size_t space = GetContiguiousWritableSpace();
         if (space != 0) {
-            const size_t length = std::min(size - offset, space);
-            memcpy(GetContiguiousWritableBuffer(), data + offset, length);
-            IncrementContiguiousWritten(length);
-            offset += length;
+            const size_t avail = std::min(size - n, space);
+            memcpy(GetContiguiousWritableBuffer(), data, avail);
+            IncrementContiguiousWritten(avail);
+            data += avail, n += avail;
         } else {
             break;
         }
     }
-    return offset;
+    return n;
 }
 
 size_t CircularBuffer::Read(char *data, size_t size)
 {
-    size_t offset = 0;
-    for (auto i = 0; i < 2 && offset < size; ++i) {
+    size_t n = 0;
+    for (auto i = 0; i < 2 && n < size; ++i) {
         const size_t space = GetContiguiousReadableSpace();
         if (space != 0) {
-            const size_t length = std::min(size - offset, space);
-            memcpy(data + offset, GetContiguiousReadableBuffer(), length);
-            IncrementContiguiousRead(length);
-            offset += length;
+            const size_t avail = std::min(size - n, space);
+            memcpy(data, GetContiguiousReadableBuffer(), avail);
+            IncrementContiguiousRead(avail);
+            data += avail, n += avail;
         } else {
             break;
         }
     }
-    return offset;
+    return n;
 }
 
 size_t CircularBuffer::Remove(size_t size)
 {
-    size_t offset = 0;
-    for (auto i = 0; i < 2 && offset < size; ++i) {
+    size_t n = 0;
+    for (auto i = 0; i < 2 && n < size; ++i) {
         const size_t space = GetContiguiousReadableSpace();
         if (space != 0) {
-            const size_t length = std::min(size - offset, space);
-            IncrementContiguiousRead(length);
-            offset += length;
+            const size_t avail = std::min(size - n, space);
+            IncrementContiguiousRead(avail);
+            n += avail;
         } else {
             break;
         }
     }
-    return offset;
+    return n;
 }
 
 size_t CircularBuffer::Peek(char *data, size_t size) const
@@ -102,58 +97,32 @@ size_t CircularBuffer::Peek(char *data, size_t size) const
 
 size_t CircularBuffer::GetContiguiousWritableSpace() const
 {
-    if (inptr_ >= outptr_)
-        return base_ + size_ - inptr_ - (base_ == outptr_ ? 1 : 0);
-    return outptr_ - inptr_ - 1;
+    return std::min(out_ + size_ - in_, size_ - (in_ & (size_ - 1)));
 }
 
 char *CircularBuffer::GetContiguiousWritableBuffer() const
 {
-    return inptr_;
+    return base_ + (in_ & (size_ - 1));
 }
 
 void CircularBuffer::IncrementContiguiousWritten(size_t size)
 {
-    if (inptr_ >= outptr_) {
-        DBGASSERT(inptr_ + size + (base_ == outptr_ ? 1 : 0) <= base_ + size_);
-        if (inptr_ + size < base_ + size_) {
-            inptr_ += size;
-        } else {
-            inptr_ = base_;
-        }
-    } else {
-        DBGASSERT(inptr_ + size + 1 <= outptr_);
-        inptr_ += size;
-    }
+    DBGASSERT(size <= std::min(out_ + size_ - in_, size_ - (in_ & (size_ - 1))));
+    in_ += size;
 }
 
 size_t CircularBuffer::GetContiguiousReadableSpace() const
 {
-    if (outptr_ <= inptr_)
-        return inptr_ - outptr_;
-    return base_ + size_ - outptr_;
+    return std::min(in_ - out_, size_ - (out_ & (size_ - 1)));
 }
 
 const char *CircularBuffer::GetContiguiousReadableBuffer() const
 {
-    return outptr_;
+    return base_ + (out_ & (size_ - 1));
 }
 
 void CircularBuffer::IncrementContiguiousRead(size_t size)
 {
-    if (outptr_ <= inptr_) {
-        DBGASSERT(outptr_ + size <= inptr_);
-        if (outptr_ + size < inptr_) {
-            outptr_ += size;
-        } else {
-            outptr_ = inptr_ = base_;
-        }
-    } else {
-        DBGASSERT(outptr_ + size <= base_ + size_);
-        if (outptr_ + size < base_ + size_) {
-            outptr_ += size;
-        } else {
-            outptr_ = base_;
-        }
-    }
+    DBGASSERT(size <= std::min(in_ - out_, size_ - (out_ & (size_ - 1))));
+    out_ += size;
 }

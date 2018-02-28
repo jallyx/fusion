@@ -41,5 +41,6 @@ public:
 
 private:
     class Twinkler;
+    class TwinklerByMonthly;
     std::multimap<uint32, Twinkler*> twinklers_;
 };

@@ -740,12 +740,11 @@ void HttpClient::FinishTask()
     }
 }
 
-std::string HttpClient::EncodeUrl(const char *data)
+std::string HttpClient::EncodeUrl(const std::string& data)
 {
     std::string result;
-    result.reserve(strlen(data) * 3);
-    for (const char *ptr = data; *ptr != '\0'; ++ptr) {
-        unsigned char value = *ptr;
+    result.reserve(data.length() * 3);
+    for (unsigned char value : data) {
         if (value == '\x20') {
             result.append(1, '+');
         } else if (isalnum(value) || strchr("-_.*", value)) {

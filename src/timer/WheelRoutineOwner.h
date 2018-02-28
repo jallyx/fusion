@@ -13,8 +13,6 @@ public:
     WheelRoutineOwner() : timer_mgr_(nullptr) {}
 
 protected:
-    virtual WheelTimerMgr *GetWheelTimerMgr() = 0;
-
     inline WheelTimerMgr *GetCacheWheelTimerMgr()
     {
         return timer_mgr_ != nullptr ? timer_mgr_ : timer_mgr_ = GetWheelTimerMgr();
@@ -58,6 +56,8 @@ protected:
     }
 
 private:
+    virtual WheelTimerMgr *GetWheelTimerMgr() = 0;
+
     WheelTimerMgr *timer_mgr_;
 };
 

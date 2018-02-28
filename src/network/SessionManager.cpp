@@ -1,5 +1,4 @@
 #include "SessionManager.h"
-#include "Connection.h"
 #include "OS.h"
 
 SessionManager::SessionManager()
@@ -32,7 +31,10 @@ void SessionManager::CheckSessions()
 {
     Session *session = nullptr;
     while (waiting_room_.Dequeue(session)) {
-        session->SetStatus(Session::Running);
+        if (session->IsActive()) {
+            session->OnManaged();
+            session->SetStatus(Session::Running);
+        }
         sessions_.insert(session);
     }
 
@@ -41,15 +43,12 @@ void SessionManager::CheckSessions()
         if (sessions_.erase(session) != 0) {
             session->OnShutdownSession();
         }
-        if (session->IsMonopolizeConnection()) {
+        if (session->IsIndependent()) {
             session->DeleteObject();
             continue;
         }
-        const std::shared_ptr<Connection> &connection = session->GetConnection();
-        if (connection->IsSendBufferEmpty() || session->IsShutdownExpired()) {
-            if (connection->IsActive()) {
-                connection->Close();
-            }
+        if (!session->HasSendDataAwaiting() || session->IsShutdownExpired()) {
+            session->Disconnect();
         }
         recycle_bin_.Enqueue(session);
     }
@@ -84,7 +83,7 @@ void SessionManager::RemoveSession(Session *session)
 void SessionManager::KillSession(Session *session)
 {
     if (session->IsActive()) {
-        session->GetConnection()->Close();
+        session->Disconnect();
         session->ShutdownSession();
     }
 }
@@ -109,8 +108,8 @@ void SessionManager::ShutdownAll()
 void SessionManager::ClearAll()
 {
     auto SafeSessionDeleter = [](Session *session) {
-        session->GetConnection()->Close();
-        while (!session->IsMonopolizeConnection())
+        session->Disconnect();
+        while (!session->IsIndependent())
             OS::SleepMS(1);
         session->DeleteObject();
     };

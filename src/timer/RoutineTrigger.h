@@ -3,8 +3,11 @@
 #include <time.h>
 #include "Base.h"
 
+#define MAX_CYCLE_MONTHLY (60*60*24*31)
+
 enum TriggerCycle
 {
+    ByMonthlyTrigger,
     ByWeeklyTrigger,
     ByDailyTrigger,
     ByHourlyTrigger,
@@ -33,3 +36,6 @@ time_t GetTriggerPointTime(TriggerCycle tc, TriggerPoint tp);
 
 time_t CalcPreviousTriggerPointTime(TriggerCycle tc, TriggerPoint tp);
 time_t CalcNextTriggerPointTime(TriggerCycle tc, TriggerPoint tp);
+
+time_t CalcPreviousTriggerPointTimeByMonthly(TriggerPoint tp);
+time_t CalcNextTriggerPointTimeByMonthly(TriggerPoint tp);

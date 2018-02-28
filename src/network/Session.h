@@ -27,15 +27,6 @@ public:
         Disabled,
     };
 
-    class ISendBuffer {
-    public:
-        virtual void WritePacket(const INetPacket &pck) = 0;
-        virtual void WritePacket(const char *data, size_t size) = 0;
-        virtual void WritePacket(const INetPacket &pck, const INetPacket &data) = 0;
-        virtual void WritePacket(const INetPacket &pck, const char *data, size_t size) = 0;
-        virtual size_t GetDataSize() const = 0;
-    };
-
     class IEventObserver {
     public:
         virtual void OnRecvPacket(Session *session) = 0;
@@ -45,9 +36,8 @@ public:
     Session(bool isDeflatePacket = false, bool isInflatePacket = false, bool isRapidMode = false);
     virtual ~Session();
 
-    void SetConnection(std::shared_ptr<Connection> &&connPtr);
+    void SetConnection(std::shared_ptr<Connection> &&conn);
     const std::shared_ptr<Connection> &GetConnection() const;
-    bool IsMonopolizeConnection() const;
 
     void SetEventObserver(IEventObserver *observer);
     void ClearPacketOverstockFlag();
@@ -72,12 +62,16 @@ public:
     virtual void DeleteObject();
     virtual void CheckTimeout() {}
     virtual void OnConnected() {}
+    virtual void OnManaged() {}
+
+    virtual void Disconnect();
+    virtual bool IsIndependent() const;
+    virtual bool HasSendDataAwaiting() const;
+    virtual size_t GetSendDataSize() const;
 
     const std::string &GetHost() const;
     unsigned long GetIPv4() const;
     unsigned short GetPort() const;
-
-    size_t GetSendDataSize() const { return send_buffer_->GetDataSize(); }
 
     void SetManager(SessionManager *manager) { manager_ = manager;}
     SessionManager *GetManager() const { return manager_; }
@@ -113,7 +107,6 @@ private:
     SessionManager *manager_;
 
     std::shared_ptr<Connection> connection_;
-    ISendBuffer *send_buffer_;
     ThreadSafeDoubleQueue<INetPacket*, 128> recv_queue_;
 
     IEventObserver *event_observer_;

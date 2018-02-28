@@ -22,12 +22,12 @@ public:
         set_.clear();
     }
 
-    bool Insert(T v) {
+    bool Insert(const T &v) {
         std::lock_guard<std::mutex> lock(mutex_);
         return set_.insert(v).second;
     }
 
-    bool Remove(T v) {
+    bool Remove(const T &v) {
         std::lock_guard<std::mutex> lock(mutex_);
         return set_.erase(v) != 0;
     }

@@ -1,4 +1,5 @@
 #include "AINodeBase.h"
+#include "lua/LuaFunc.h"
 
 AINodeBase::AINodeBase(AIBlackboard &blackboard)
 : blackboard_(blackboard)
@@ -32,7 +33,7 @@ bool AINodeBase::ExternalEvaluate() const
 {
     if (!external_precondition_.isref())
         return true;
-    if (external_precondition_.Call<bool>())
+    if (LuaFunc(external_precondition_).Call<bool>())
         return true;
     return false;
 }

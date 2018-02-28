@@ -4,6 +4,9 @@
 TileHandler::TileHandler(const TileDefine &tile_define)
 : tile_define_(tile_define)
 , tiles_(nullptr)
+, anchor_(nullptr)
+, group_time_{}
+, tick_count_{}
 {
 }
 
@@ -71,4 +74,35 @@ void TileHandler::TryRecycleTile(MapTile *tile)
         tiles_[tile->x()][tile->z()] = nullptr;
         delete tile;
     }
+}
+
+void TileHandler::UpdateActive(int dt)
+{
+    const size_t i = ++tick_count_ % group_count_;
+    for (size_t i = 0; i < group_count_; ++i) {
+        group_time_[i] += dt;
+    }
+
+    TRY_BEGIN {
+
+        if (tiles_ != nullptr) {
+            for (size_t x = 0; x < tile_define_.x_size(); ++x) {
+                if (tiles_[x] != nullptr && x % group_count_ == i) {
+                    for (size_t z = 0; z < tile_define_.z_size(); ++z) {
+                        if (tiles_[x][z] != nullptr) {
+                            tiles_[x][z]->UpdateActive(group_time_[i]);
+                        }
+                    }
+                }
+            }
+        }
+
+    } TRY_END
+    CATCH_BEGIN(const IException &e) {
+        e.Print();
+    } CATCH_END
+    CATCH_BEGIN(...) {
+    } CATCH_END
+
+    group_time_[i] = 0;
 }

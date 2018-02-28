@@ -56,7 +56,7 @@ public:
     const std::string &filepath() const { return filepath_; }
     const std::string &filedata() const { return filedata_; }
 
-    static std::string EncodeUrl(const char *data);
+    static std::string EncodeUrl(const std::string& data);
 
 protected:
     virtual void ProvideBody(std::string &body) {}

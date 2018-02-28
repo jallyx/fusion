@@ -30,8 +30,8 @@ private:
 class istream_ConstBuffer : public std::istream {
 public:
     istream_ConstBuffer(const void *dataptr, const void *endptr)
-        : std::istream(&streambuf_), streambuf_(dataptr, endptr)
-    {}
+        : std::istream(nullptr), streambuf_(dataptr, endptr)
+    { this->init(&streambuf_); }
 private:
     streambuf_ConstBuffer streambuf_;
 };
@@ -51,11 +51,11 @@ public:
 private:
     virtual std::streamsize showmanyc() { return stream_.GetReadableSize(); }
     virtual int_type underflow() {
-        if (!stream_.IsReadableEmpty()) return stream_.Peek<char>();
+        if (!stream_.IsReadableEmpty()) return stream_.Peek<unsigned char>();
         return std::char_traits<char>::eof();
     }
     virtual int_type uflow() {
-        if (!stream_.IsReadableEmpty()) return stream_.Read<char>();
+        if (!stream_.IsReadableEmpty()) return stream_.Read<unsigned char>();
         return std::char_traits<char>::eof();
     }
     virtual std::streamsize xsgetn(char *s, std::streamsize n) {
@@ -64,8 +64,8 @@ private:
         return size;
     }
     virtual int_type overflow(int_type c) {
-        stream_.Write((char)c);
-        return c;
+        stream_.Write((unsigned char)c);
+        return (unsigned char)c;
     }
     virtual std::streamsize xsputn(const char *s, std::streamsize n) {
         stream_.Append(s, (size_t)n);
@@ -76,8 +76,8 @@ private:
 class iostream_INetStream : public std::istream, public std::ostream {
 public:
     iostream_INetStream(INetStream &stream)
-        : std::istream(&streambuf_), std::ostream(&streambuf_), streambuf_(stream)
-    {}
+        : std::istream(nullptr), std::ostream(nullptr), streambuf_(stream)
+    { this->init(&streambuf_); }
 private:
     streambuf_INetStream streambuf_;
 };

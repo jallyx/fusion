@@ -28,7 +28,7 @@ public:
     }
 
     ~LuaTable() {
-        if (isget_ && is_alive()) {
+        if (isget_) {
             lua_remove(L, index_);
         }
     }
@@ -36,7 +36,7 @@ public:
     LuaTable(LuaTable &&other) {
         L = other.L, index_ = other.index_;
         isget_ = other.isget_, pointer_ = other.pointer_;
-        other.pointer_ = nullptr;
+        other.isget_ = false, other.pointer_ = nullptr;
     }
 
     LuaTable &operator=(LuaTable &&other) {

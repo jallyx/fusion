@@ -12,12 +12,16 @@ class WheelTimer
 public:
     WheelTimer(uint64 active_interval, uint32 loop_count = 0);
 
+    void RePush(uint64 next_active_time = 0);
+
     void DetachMgr();
 
     uint64 GetCurrentTickTime() const;
     uint64 GetNextActiveTime() const;
 
     uint32 GetRemainder() const { return loop_count_; }
+
+    uint64 active_interval() const { return active_interval_; }
 
 protected:
     virtual ~WheelTimer();
@@ -37,8 +41,6 @@ protected:
     void ReActivate() {
         SetNextActiveTime(1);
     }
-
-    uint64 active_interval() const { return active_interval_; }
 
 private:
     const uint64 active_interval_;

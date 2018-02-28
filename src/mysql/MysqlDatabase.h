@@ -1,7 +1,7 @@
 #pragma once
 
 #include <mutex>
-#include <stack>
+#include <queue>
 #include "MysqlConnection.h"
 
 class MysqlDatabase : public noncopyable
@@ -25,6 +25,6 @@ private:
     unsigned int port_;
 
     std::mutex mutex_;
-    std::stack<MysqlConnection*> connections_;
+    std::queue<MysqlConnection*> connections_;
     unsigned int max_connnection_count_;
 };

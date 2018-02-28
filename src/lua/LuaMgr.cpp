@@ -38,7 +38,7 @@ bool LuaMgr::DoFile(lua_State *L, const std::string &fileName)
 
 void LuaMgr::DoFileEnv(lua_State *L, const char *fileName)
 {
-    if (LuaMgr::instance() != NULL) {
+    if (LuaMgr::instance() != nullptr) {
         sLuaMgr.DoFile(L, fileName);
     } else {
         lua::dofile(L, fileName);
@@ -51,9 +51,9 @@ int LuaMgr::CacheFile(lua_State *L, const std::string &fileName)
     do {
         rwlock_.rdlock();
         std::lock_guard<rwlock> lock(rwlock_, std::adopt_lock);
-        auto iterator = chunks_.find(fileName);
-        if (iterator != chunks_.end()) {
-            chunk = iterator->second;
+        auto itr = chunks_.find(fileName);
+        if (itr != chunks_.end()) {
+            chunk = itr->second;
         }
     } while (0);
 

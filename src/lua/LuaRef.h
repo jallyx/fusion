@@ -37,6 +37,7 @@ public:
     }
 
     lua_State *getL() const { return L; }
+    int index() const { return ref_; }
 
     bool isref() const {
         return ref_ != LUA_NOREF && ref_ != LUA_REFNIL;
@@ -50,6 +51,11 @@ public:
         *this = LuaRef();
     }
 
+    LuaRef Clone() const {
+        getref();
+        return LuaRef(L, true);
+    }
+
     template<typename T>
     void Set(T object) {
         lua::push<T>::invoke(L, object);
@@ -60,70 +66,6 @@ public:
     T Get() const {
         getref();
         return lua::pop<T>::invoke(L);
-    }
-
-    template<typename RVal, typename... Args>
-    RVal Call(Args... args) const {
-        lua_pushcfunction(L, lua::on_error);
-        int errfunc = lua_gettop(L);
-
-        getref();
-        if (lua_isfunction(L, -1)) {
-            lua::push_args(L, std::forward<Args>(args)...);
-            lua_pcall(L, sizeof...(args), 1, errfunc);
-        } else {
-            lua::print_error(L, "LuaRef::Call() attempt to call '%d' (not a function)", ref_);
-        }
-
-        lua_remove(L, errfunc);
-        return lua::pop<RVal>::invoke(L);
-    }
-
-    template<typename RVal, typename... Args>
-    RVal CallMethod(const char *name, Args... args) const {
-        lua_pushcfunction(L, lua::on_error);
-        int errfunc = lua_gettop(L);
-
-        getref();
-        if (lua_istable(L, -1) || lua_type(L, -1) == LUA_TUSERDATA) {
-            lua_getfield(L, -1, name);
-            if (lua_isfunction(L, -1)) {
-                lua_rotate(L, -2, 1);
-                lua::push_args(L, std::forward<Args>(args)...);
-                lua_pcall(L, sizeof...(args) + 1, 1, errfunc);
-            } else {
-                lua_remove(L, -2);
-                lua::print_error(L, "LuaRef::CallMethod() attempt to call '%s' (not a function)", name);
-            }
-        } else {
-            lua::print_error(L, "LuaRef::CallMethod() attempt to call '%d' (not a table)", ref_);
-        }
-
-        lua_remove(L, errfunc);
-        return lua::pop<RVal>::invoke(L);
-    }
-
-    template<typename RVal, typename... Args>
-    RVal CallStaticMethod(const char *name, Args... args) const {
-        lua_pushcfunction(L, lua::on_error);
-        int errfunc = lua_gettop(L);
-
-        getref();
-        if (lua_istable(L, -1) || lua_type(L, -1) == LUA_TUSERDATA) {
-            lua_getfield(L, -1, name);
-            lua_remove(L, -2);
-            if (lua_isfunction(L, -1)) {
-                lua::push_args(L, std::forward<Args>(args)...);
-                lua_pcall(L, sizeof...(args), 1, errfunc);
-            } else {
-                lua::print_error(L, "LuaRef::CallStaticMethod() attempt to call '%s' (not a function)", name);
-            }
-        } else {
-            lua::print_error(L, "LuaRef::CallStaticMethod() attempt to call '%d' (not a table)", ref_);
-        }
-
-        lua_remove(L, errfunc);
-        return lua::pop<RVal>::invoke(L);
     }
 
 private:

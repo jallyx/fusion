@@ -8,16 +8,17 @@ class AoiHandler;
 class AoiActor
 {
 public:
+    enum Flag {PRECISE, VACUOUS, SPAWN, VIEWER};
     enum Type {PLAYER, CREATURE, SOBJ, OTHER, N};
     enum Axis {X, Z};
 
-    AoiActor(Type type, bool strict);
+    AoiActor(Type type, int flags);
     ~AoiActor();
 
-    void SetAttribute(float r);
+    void SetRadius(float r);
     void SetLimits(const size_t (&limits)[N]);
 
-    void CheckMarker();
+    void CollateMarker();
 
     void OnPush(AoiHandler *handler, float x, float z);
     void OnMove(float x, float z);
@@ -39,6 +40,9 @@ public:
     bool ForeachMarker(const std::function<bool(AoiActor*)> &func) const;
     bool ForeachMarker(int type, const std::function<bool(AoiActor*)> &func) const;
 
+    size_t GetWatcherCount(int type) const { return watcher_[type].size(); }
+    size_t GetMarkerCount(int type) const { return marker_[type].size(); }
+
     bool IsInWorld() const { return handler_ != nullptr; }
 
     float x_left() const { return x_ - r_; }
@@ -53,6 +57,7 @@ protected:
     virtual bool TestInteresting(AoiActor *actor) const { return false; }
     virtual void OnAddMarker(AoiActor *actor) {}
     virtual void OnRemoveMarker(AoiActor *actor) {}
+    virtual void OnSpawn() {}
 
 private:
     void AddWatcher(AoiActor *actor);
@@ -81,10 +86,10 @@ private:
     }
 
     Type type() const { return type_; }
-    bool strict() const { return strict_; }
+    int flags() const { return flags_; }
 
     const Type type_;
-    const bool strict_;
+    const int flags_;
 
     AoiHandler *handler_;
     float x_, z_, r_;
