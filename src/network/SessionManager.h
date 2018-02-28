@@ -12,21 +12,20 @@ public:
 
     void Update();
     void Tick();
+    void Stop();
 
     void AddSession(Session *session);
     void KillSession(Session *session);
     void ShutdownSession(Session *session);
-
-    void ShutdownAll();
 
 private:
     void RemoveSession(Session *session);
 
     void CheckSessions();
     void UpdateSessions();
-
     void TickSessions();
 
+    void ShutdownAll();
     void ClearAll();
 
     std::unordered_set<Session*> sessions_;

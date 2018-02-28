@@ -302,6 +302,25 @@ static int downcast_object(lua_State *L)
     return 0;
 }
 
+void register_constructor(lua_State *L, const char *name)
+{
+    const int top = lua_gettop(L);
+    if (top >= 2 && lua_istable(L, -2) && lua_isfunction(L, -1)) {
+        lua_newtable(L);
+        lua_pushliteral(L, "__call");
+        lua_rotate(L, -3, 2);
+        lua_rawset(L, -3);
+        lua_setmetatable(L, -2);
+        if (name != nullptr) {
+            lua_setglobal(L, name);
+        } else {
+            lua_pop(L, 1);
+        }
+    } else {
+        assert(false && "stack parameters is invalid.");
+    }
+}
+
 void register_prototype(lua_State *L, const char *name)
 {
     luaL_newmetatable(L, name);
@@ -344,119 +363,68 @@ void register_parent(lua_State *L, const char *name, const char *parent)
     lua_pop(L, 1);
 }
 
-bool binder::try_push_this(lua_State *pL, const char *metaname) const
+bool binder::try_push_this(lua_State *L, const char *metaname) const
 {
-    luaL_getmetatable(pL, LITERAL_UNIQUE);
-    lua_rawgetp(pL, -1, this);
-    if (lua_type(pL, -1) != LUA_TUSERDATA) {
-        lua_pop(pL, 2);
+    luaL_getmetatable(L, LITERAL_UNIQUE);
+    lua_rawgetp(L, -1, this);
+    if (lua_type(L, -1) != LUA_TUSERDATA) {
+        lua_pop(L, 2);
         return false;
     }
 
-    push_metatable(pL, metaname);
-    lua_pop(pL, downcast_object(pL) + 1);
-    lua_replace(pL, -2);
+    push_metatable(L, metaname);
+    lua_pop(L, downcast_object(L) + 1);
+    lua_replace(L, -2);
     return true;
 }
 
-void binder::bind(lua_State *pL, const char *name) const
+void binder::bind(lua_State *L, const char *name)
 {
-    if (lua_type(pL, -1) == LUA_TUSERDATA) {
-        if (user_ == nullptr || L == pL) {
+    if (lua_type(L, -1) == LUA_TUSERDATA) {
+        if (user_ == nullptr || (L_ == L && user_->obj == this)) {
             if (user_ != nullptr) {
-                const_cast<void*&>(user_->obj) = nullptr;
+                user_->obj = nullptr;
             }
-            L = pL, user_ = lua2object<user*>::invoke(pL, -1);
-            register_this(pL);
-        }
-        else {
-            print_error(pL, "'%s' perhaps appear a wild pointer %p,%p!=%p,%p.",
-                        name, user_->obj, L, this, pL);
+            L_ = L, user_ = lua2object<user*>::invoke(L, -1);
+            register_this(L);
+        } else {
+            print_error(L, "'%s' perhaps appear a wild pointer %p!=%p||%p!=%p.",
+                        name, L_, L, user_->obj, this);
         }
     }
 }
 
-void binder::unbind(user *puser, const char *name) const
+void binder::unbind(void *user, const char *name)
 {
     if (user_ != nullptr) {
-        if (user_ == puser) {
-            L = nullptr, user_ = nullptr;
+        if (user_ == user && user_->obj == this) {
+            L_ = nullptr, user_ = nullptr;
         } else {
-            print_error(L, "'%s' perhaps appear a wild pointer %p->%p!=%p->%p.",
-                        name, this, user_, puser, puser->obj);
+            print_error(L_, "'%s' perhaps appear a wild pointer %p!=%p||%p!=%p.",
+                        name, user_, user, user_->obj, this);
         }
     }
 }
 
-void binder::register_this(lua_State *pL) const
+void binder::register_this(lua_State *L) const
 {
-    if (lua_type(pL, -1) == LUA_TUSERDATA) {
-        luaL_getmetatable(pL, LITERAL_UNIQUE);
-        lua_pushvalue(pL, -2);
-        lua_rawsetp(pL, -2, this);
-        lua_pop(pL, 1);
+    if (lua_type(L, -1) == LUA_TUSERDATA) {
+        luaL_getmetatable(L, LITERAL_UNIQUE);
+        lua_pushvalue(L, -2);
+        lua_rawsetp(L, -2, this);
+        lua_pop(L, 1);
     }
 }
 
 void binder::on_destroy() const
 {
     if (user_ != nullptr) {
-        const_cast<void*&>(user_->obj) = nullptr;
-        luaL_getmetatable(L, LITERAL_UNIQUE);
-        lua_pushnil(L);
-        lua_rawsetp(L, -2, this);
-        lua_pop(L, 1);
+        user_->obj = nullptr;
+        luaL_getmetatable(L_, LITERAL_UNIQUE);
+        lua_pushnil(L_);
+        lua_rawsetp(L_, -2, this);
+        lua_pop(L_, 1);
     }
-}
-
-table::table_obj::table_obj(lua_State *L, int index)
-: L(L)
-, index_(index)
-, pointer_(lua_istable(L, index) ? lua_topointer(L, index) : nullptr)
-{
-}
-
-table::table_obj::~table_obj()
-{
-    if (is_alive()) {
-        lua_remove(L, index_);
-    }
-}
-
-size_t table::table_obj::len() const
-{
-    if (is_alive()) {
-        lua_len(L, index_);
-        return pop<size_t>::invoke(L);
-    }
-    return 0;
-}
-
-table::table(lua_State *L)
-{
-    lua_newtable(L);
-    obj_ = std::make_shared<table_obj>(L, lua_gettop(L));
-}
-
-table::table(lua_State *L, int index)
-{
-    if (index < 0) {
-        index += lua_gettop(L) + 1;
-    }
-    assert(index > 0 && "stack index is invalid.");
-    obj_ = std::make_shared<table_obj>(L, index);
-}
-
-table::table(lua_State *L, const char *name)
-{
-    lua_getglobal(L, name);
-    if (lua_isnil(L, -1)) {
-        lua_pop(L, 1);
-        lua_newtable(L);
-        lua_pushvalue(L, -1);
-        lua_setglobal(L, name);
-    }
-    obj_ = std::make_shared<table_obj>(L, lua_gettop(L));
 }
 
 }

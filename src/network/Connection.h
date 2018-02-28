@@ -31,6 +31,9 @@ public:
     bool IsActive() const { return is_active_; }
     bool IsConnected() const { return is_connected_; }
 
+    const std::string &addr() const { return addr_; }
+    unsigned short port() const { return port_; }
+
     static void InitSendBufferPool();
     static void ClearSendBufferPool();
 

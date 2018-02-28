@@ -124,10 +124,11 @@ class GeneratorHelperCPP:
 
     def __generatetableentity(self, entity, prefix):
         name = entity['name']
+        tablename = entity['(name)'] if '(name)' in entity else name
         self.filehandle.write('\n')
         self.filehandle.write('template<> const char *GetTableName<%s>()\n' % name)
         self.filehandle.write('{\n')
-        self.filehandle.write('\treturn "%s";\n' % name)
+        self.filehandle.write('\treturn "%s";\n' % tablename)
         self.filehandle.write('}\n')
 
         keyitem, requireds, optionals = None, [], []
@@ -172,7 +173,7 @@ class GeneratorHelperCPP:
         self.filehandle.write('}\n')
 
         self.filehandle.write('\n')
-        self.filehandle.write('template<> int GetTableFieldIndexByName<%s>(const char *name)\n' % name)
+        self.filehandle.write('template<> ssize_t GetTableFieldIndexByName<%s>(const char *name)\n' % name)
         self.filehandle.write('{\n')
         self.__genaratefieldindexbyname(requireds, optionals)
         self.filehandle.write('\treturn -1;\n')

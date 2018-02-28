@@ -31,6 +31,8 @@ protected:
 
     virtual std::string GetConfigFile() = 0;
 
+    static bool ParseConfigFile(KeyFile &config, const std::string &file);
+
 private:
     KeyFile config_;
 

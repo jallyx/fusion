@@ -34,6 +34,12 @@ void WheelTimer::SetNextActiveTime(uint64 next_active_time)
     }
 }
 
+void WheelTimer::FixFirstActiveTime()
+{
+    if (active_tick_count_ < mgr_->tick_count_)
+        active_tick_count_ = mgr_->tick_count_;
+}
+
 uint64 WheelTimer::GetCurrentTickTime() const
 {
     return mgr_->tick_particle_ * mgr_->tick_count_;

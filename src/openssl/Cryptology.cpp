@@ -28,35 +28,55 @@ std::string encode_pubkey(RSA *rsa)
     return pubkey;
 }
 
-std::string public_encrypt(const std::string &pubkey, const std::string &plaintext)
+std::string public_encrypt(const std::string &pubkey, const void *data, size_t len)
 {
     std::string ciphertext;
     const unsigned char *pp = (const unsigned char *)pubkey.data();
     RSA *rsa = d2i_RSA_PUBKEY(nullptr, &pp, pubkey.size());
     if (rsa != nullptr) {
         ciphertext.resize(RSA_size(rsa));
-        int len = RSA_public_encrypt(
-            plaintext.size(), (const unsigned char *)plaintext.data(),
+        int size = RSA_public_encrypt(len, (const unsigned char *)data,
             (unsigned char *)ciphertext.data(), rsa, RSA_PKCS1_PADDING);
-        ciphertext.resize(len != -1 ? len : 0);
+        ciphertext.resize(size != -1 ? size : 0);
         RSA_free(rsa);
     }
     return ciphertext;
 }
 
-std::string private_decrypt(RSA *rsa, const std::string &ciphertext)
+std::string private_decrypt(RSA *rsa, const void *data, size_t len)
 {
     std::string plaintext(RSA_size(rsa), '\0');
-    int len = RSA_private_decrypt(
-        ciphertext.size(), (const unsigned char *)ciphertext.data(),
+    int size = RSA_private_decrypt(len, (const unsigned char *)data,
         (unsigned char *)plaintext.data(), rsa, RSA_PKCS1_PADDING);
-    plaintext.resize(len != -1 ? len : 0);
+    plaintext.resize(size != -1 ? size : 0);
     return plaintext;
 }
 
 }
 
+namespace hex {
+
+std::string dump(const void *data, size_t len)
+{
+    std::string results(len << 1, '\0');
+    for (size_t index = 0; index < len; ++index) {
+        static const char hash_table[] = "0123456789abcdef";
+        results[index << 1] = hash_table[((const unsigned char *)data)[index] >> 4];
+        results[(index << 1) + 1] = hash_table[((const unsigned char *)data)[index] & 15];
+    }
+    return results;
+}
+
+}
+
 namespace sha {
+
+std::string feed256(const void *data, size_t len)
+{
+    std::string results(SHA256_DIGEST_LENGTH, '\0');
+    SHA256((const unsigned char *)data, len, (unsigned char *)results.data());
+    return results;
+}
 
 std::string feed512(const void *data, size_t len)
 {

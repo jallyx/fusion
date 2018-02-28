@@ -32,16 +32,25 @@ IServerMaster::~IServerMaster()
     Logger::deleteInstance();
 }
 
+bool IServerMaster::ParseConfigFile(KeyFile &config, const std::string &file)
+{
+    if (config.ParseFile(file.c_str())) {
+        return true;
+    }
+    std::string path(OS::GetProgramDirectory());
+    path.append(1, os::sep).append(file);
+    if (config.ParseFile(path.c_str())) {
+        return true;
+    }
+    return false;
+}
+
 int IServerMaster::Initialize(int argc, char *argv[])
 {
     const std::string configFile = GetConfigFile();
-    if (!config_.ParseFile(configFile.c_str())) {
-        std::string newConfigFile(OS::GetProgramDirectory());
-        newConfigFile.append(1, os::sep).append(configFile);
-        if (!config_.ParseFile(newConfigFile.c_str())) {
-            printf("open config file '%s' failed.\n", configFile.c_str());
-            return -1;
-        }
+    if (!ParseConfigFile(config_, configFile)) {
+        printf("open config file '%s' failed.\n", configFile.c_str());
+        return -1;
     }
 
     if (!sLogger.Start()) {

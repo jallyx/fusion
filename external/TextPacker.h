@@ -23,7 +23,10 @@ public:
     TextPacker &operator<<(T v);
 
     void PutAnchor(char anchor = ';') {
-        stream.seekp(-1, std::ios_base::cur).put(anchor);
+        stream.put(anchor);
+    }
+    void PutDelimiter(char delimiter = ',') {
+        stream.seekp(-1, std::ios::cur).put(delimiter);
     }
 
     std::string str() const { return stream.str(); }
@@ -47,8 +50,11 @@ public:
         T v; operator>>(v); return v;
     }
 
-    bool IsAnchor(char anchor = ';') const {
-        return *(ptr-1) == anchor;
+    bool IsAnchor(char anchor = ';') {
+        return *ptr == anchor ? (++ptr, true) : false;
+    }
+    bool IsDelimiter(char delimiter = ',') const {
+        return *(ptr - 1) == delimiter;
     }
 
     const char *GetIterator() { return ptr; }
@@ -97,9 +103,10 @@ inline TextPacker &TextPacker::operator<<(uint8 v)
     return *this;
 }
 template <>
-inline TextPacker &TextPacker::operator<<(std::string s)
+inline TextPacker &TextPacker::operator<<(char *s)
 {
-    return operator<<(s.c_str());
+    WriteTEXT(stream, s);
+    return *this;
 }
 template <>
 inline TextPacker &TextPacker::operator<<(const char *s)
@@ -108,10 +115,9 @@ inline TextPacker &TextPacker::operator<<(const char *s)
     return *this;
 }
 template <>
-inline TextPacker &TextPacker::operator<<(char *s)
+inline TextPacker &TextPacker::operator<<(std::string s)
 {
-    WriteTEXT(stream, s);
-    return *this;
+    return operator<<(s.c_str());
 }
 
 template <typename T>

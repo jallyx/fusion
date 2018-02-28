@@ -19,17 +19,20 @@ public:
     void AddTask(AsyncTask *task, AsyncTaskOwner *owner = nullptr);
     void AddHeavyTask(AsyncTask *task, AsyncTaskOwner *owner = nullptr);
 
+    void SetWorkerCount(size_t count) { worker_count_ = count; }
+
 protected:
     virtual bool Prepare();
     virtual void Finish();
 
 private:
+    static std::weak_ptr<AsyncTaskOwner> null_owner_;
     size_t worker_count_;
 
     std::mutex mutex_, heavy_mutex_;
     std::condition_variable cv_, heavy_cv_;
-    ThreadSafeQueue<std::pair<AsyncTask*, AsyncTaskOwner*>> tasks_;
-    ThreadSafeQueue<std::pair<AsyncTask*, AsyncTaskOwner*>> heavy_tasks_;
+    ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> tasks_;
+    ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> heavy_tasks_;
 };
 
 #define sAsyncTaskMgr (*AsyncTaskMgr::instance())

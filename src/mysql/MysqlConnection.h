@@ -28,6 +28,7 @@ public:
 
     my_ulonglong GetInsertID() const;
     unsigned int GetLastErrno() const;
+    const char *GetLastError() const;
 
     operator bool() const { return mysql_ != nullptr; }
     bool operator!() const { return mysql_ == nullptr; }

@@ -1,9 +1,6 @@
 #include "System.h"
-#include <stdint.h>
-#include <stdlib.h>
-#include <algorithm>
 #include <tuple>
-#include "Macro.h"
+#include <utility>
 
 namespace {
 struct SystemLoader {
@@ -20,46 +17,40 @@ struct tm System::date_time_;
 #if defined(_WIN32)
     LARGE_INTEGER System::performance_frequency_;
 #endif
+std::default_random_engine System::random_engine_;
 
 void System::Init()
 {
-    srand((unsigned)time(nullptr));
 #if defined(_WIN32)
     QueryPerformanceFrequency(&performance_frequency_);
 #endif
+    random_engine_.seed(std::random_device()());
 }
 
 void System::Update()
 {
-    auto atom = []()->std::pair<time_t, struct tm> {
+    auto atomic_time = []()->std::pair<time_t, struct tm> {
         std::pair<time_t, struct tm> result;
         time(&result.first);
         localtime_r(&result.first, &result.second);
         return result;
     };
-    std::tie(unix_time_, date_time_) = atom();
+    std::tie(unix_time_, date_time_) = atomic_time();
     sys_time_ = GetRealSysTime();
-}
-
-static inline uint32_t SystemRandomU32() {
-    return uint32_t((rand() << 22) ^ (rand() << 11) ^ rand());
-}
-static inline float SystemRandomF32() {
-    return float((double)SystemRandomU32() / UINT32_MAX);
 }
 
 int System::Rand(int lower, int upper)
 {
-    if (lower == upper) return lower;
     if (lower > upper) std::swap(lower, upper);
-    return lower + SystemRandomU32() % (upper - lower);
+    if (lower == upper || lower == upper - 1) return lower;
+    return std::uniform_int_distribution<int>(lower, upper - 1)(random_engine_);
 }
 
 float System::Randf(float lower, float upper)
 {
     if (lower == upper) return lower;
     if (lower > upper) std::swap(lower, upper);
-    return lower + (upper - lower) * SystemRandomF32();
+    return std::uniform_real_distribution<float>(lower, upper)(random_engine_);
 }
 
 static inline int PassDayTime(const struct tm &tm) {

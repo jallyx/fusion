@@ -10,13 +10,20 @@ void free_key(RSA *rsa);
 
 std::string encode_pubkey(RSA *rsa);
 
-std::string public_encrypt(const std::string &pubkey, const std::string &plaintext);
-std::string private_decrypt(RSA *rsa, const std::string &ciphertext);
+std::string public_encrypt(const std::string &pubkey, const void *data, size_t len);
+std::string private_decrypt(RSA *rsa, const void *data, size_t len);
+
+}
+
+namespace hex {
+
+std::string dump(const void *data, size_t len);
 
 }
 
 namespace sha {
 
+std::string feed256(const void *data, size_t len);
 std::string feed512(const void *data, size_t len);
 
 }

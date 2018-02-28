@@ -6,6 +6,7 @@
 void WriteTEXT(std::ostream &stream, const char *text);
 std::string ReadTEXT(const char *&ptr);
 
+char ReadCHAR(const char *&ptr);
 bool ReadBOOL(const char *&ptr);
 float ReadFLOAT(const char *&ptr);
 double ReadDOUBLE(const char *&ptr);

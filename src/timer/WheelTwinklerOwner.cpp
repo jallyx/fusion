@@ -42,7 +42,7 @@ public:
     void DetachOwner()
     {
         if (!owner_.expired()) {
-            owner_.lock()->twinkler_list_.erase(itr_);
+            owner_.lock()->twinklers_.erase(itr_);
             owner_.reset();
         }
     }
@@ -53,8 +53,7 @@ protected:
     virtual bool OnPrepare()
     {
         if (owner_.expired()) return false;
-        std::list<Twinkler*> &tlist = owner_.lock()->twinkler_list_;
-        itr_ = tlist.insert(tlist.end(), this);
+        itr_ = owner_.lock()->twinklers_.emplace(routine_type_, this);
         WheelTwinkler::OnPrepare();
         return true;
     }
@@ -80,7 +79,7 @@ private:
     const std::function<void()> stop_cb_;
     const uint32 routine_type_;
 
-    std::list<Twinkler*>::iterator itr_;
+    std::multimap<uint32, Twinkler*>::iterator itr_;
     std::weak_ptr<WheelTwinklerOwner> owner_;
 };
 
@@ -135,18 +134,18 @@ void WheelTwinklerOwner::CreateTwinklerX(
 }
 
 void WheelTwinklerOwner::RemoveTwinklers(uint32 type) {
-    RemoveRoutines(twinkler_list_, type);
+    RemoveRoutines(twinklers_, type);
 }
 void WheelTwinklerOwner::RemoveTwinklers() {
-    RemoveRoutines(twinkler_list_);
+    RemoveRoutines(twinklers_);
 }
 bool WheelTwinklerOwner::HasTwinkler(uint32 type) const {
-    return HasRoutine(twinkler_list_, type);
+    return HasRoutine(twinklers_, type);
 }
 bool WheelTwinklerOwner::HasTwinkler() const {
-    return HasRoutine(twinkler_list_);
+    return HasRoutine(twinklers_);
 }
 template <>
 WheelTwinkler *WheelTwinklerOwner::FindTwinkler(uint32 type) const {
-    return FindRoutine(twinkler_list_, type);
+    return FindRoutine(twinklers_, type);
 }

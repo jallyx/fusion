@@ -82,7 +82,7 @@ void Connection::Close()
 {
     if (is_active_) {
         is_active_ = is_connected_ = false;
-        NLOG("Close connection from [%s:%hu].", addr_.c_str(), port_);
+        WLOG("Close connection from [%s:%hu].", addr_.c_str(), port_);
 
         manager_.RemoveConnection(shared_from_this());
         if (session_.IsActive()) {
@@ -203,7 +203,7 @@ void Connection::OnResolveComplete(const asio::error_code &ec, asio::ip::tcp::re
         }
 
         if (ec) {
-            NLOG("Resolve connection[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
+            WLOG("Resolve connection[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
             Close();
             return;
         }
@@ -239,7 +239,7 @@ void Connection::OnConnectComplete(const asio::error_code &ec)
         }
 
         if (ec) {
-            NLOG("Connect connection[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
+            WLOG("Connect connection[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
             Close();
             return;
         }
@@ -251,6 +251,7 @@ void Connection::OnConnectComplete(const asio::error_code &ec)
         sock_.set_option(asio::ip::tcp::no_delay(true));
         PostReadRequest();
         PostWriteRequest();
+        session_.OnConnected();
 
     } TRY_END
     CATCH_BEGIN(const asio::system_error &e) {
@@ -277,7 +278,7 @@ void Connection::OnReadComplete(const asio::error_code &ec, const char *buffer, 
         }
 
         if (ec) {
-            NLOG("Read connection[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
+            WLOG("Read connection[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
             Close();
             return;
         }
@@ -311,7 +312,7 @@ void Connection::OnWriteComplete(const asio::error_code &ec, const char *buffer,
         }
 
         if (ec) {
-            NLOG("Write connection[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
+            WLOG("Write connection[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
             Close();
             return;
         }

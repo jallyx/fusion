@@ -1,73 +1,73 @@
 #pragma once
 
-#include <list>
+#include <atomic>
+#include <map>
 #include "Base.h"
+#include "noncopyable.h"
 
 class WheelTimerMgr;
 
-class WheelRoutineOwner
+class WheelRoutineOwner : public noncopyable
 {
 public:
     WheelRoutineOwner() : timer_mgr_(nullptr) {}
-    virtual ~WheelRoutineOwner() {}
 
 protected:
     virtual WheelTimerMgr *GetWheelTimerMgr() = 0;
 
     inline WheelTimerMgr *GetCacheWheelTimerMgr()
     {
-        if (timer_mgr_ == nullptr)
-            timer_mgr_ = GetWheelTimerMgr();
-        return timer_mgr_;
+        return timer_mgr_ != nullptr ? timer_mgr_ : timer_mgr_ = GetWheelTimerMgr();
     }
 
     template <class Routine>
-    static void RemoveRoutines(std::list<Routine*> &routine_list, uint32 type)
+    static void RemoveRoutines(std::multimap<uint32, Routine*> &routines, uint32 type)
     {
-        typename std::list<Routine*>::iterator iterator = routine_list.begin();
-        while (iterator != routine_list.end()) {
-            Routine *routine = *iterator;
-            ++iterator;
-            if (routine->GetRoutineType() == type)
-                delete routine;
+        auto pair = routines.equal_range(type);
+        for (auto itr = pair.first; itr != pair.second;) {
+            delete itr++->second;
         }
     }
 
     template <class Routine>
-    static void RemoveRoutines(std::list<Routine*> &routine_list)
+    static void RemoveRoutines(std::multimap<uint32, Routine*> &routines)
     {
-        while (!routine_list.empty())
-            delete routine_list.front();
-    }
-
-    template <class Routine>
-    static bool HasRoutine(const std::list<Routine*> &routine_list, uint32 type)
-    {
-        typename std::list<Routine*>::const_iterator iterator = routine_list.begin();
-        for (; iterator != routine_list.end(); ++iterator) {
-            if ((*iterator)->GetRoutineType() == type)
-                return true;
+        auto pair = std::make_pair(routines.begin(), routines.end());
+        for (auto itr = pair.first; itr != pair.second;) {
+            delete itr++->second;
         }
-        return false;
     }
 
     template <class Routine>
-    static bool HasRoutine(const std::list<Routine*> &routine_list)
+    static bool HasRoutine(const std::multimap<uint32, Routine*> &routines, uint32 type)
     {
-        return !routine_list.empty();
+        return routines.find(type) != routines.end();
     }
 
     template <class Routine>
-    static Routine *FindRoutine(const std::list<Routine*> &routine_list, uint32 type)
+    static bool HasRoutine(const std::multimap<uint32, Routine*> &routines)
     {
-        typename std::list<Routine*>::const_iterator iterator = routine_list.begin();
-        for (; iterator != routine_list.end(); ++iterator) {
-            if ((*iterator)->GetRoutineType() == type)
-                return *iterator;
-        }
-        return nullptr;
+        return !routines.empty();
+    }
+
+    template <class Routine>
+    static Routine *FindRoutine(const std::multimap<uint32, Routine*> &routines, uint32 type)
+    {
+        typename std::multimap<uint32, Routine*>::const_iterator itr = routines.find(type);
+        return itr != routines.end() ? itr->second : nullptr;
     }
 
 private:
     WheelTimerMgr *timer_mgr_;
+};
+
+class WheelRoutineType : public noncopyable
+{
+public:
+    WheelRoutineType(uint32 initial_type = 65536) : routine_type_(initial_type) {}
+
+    uint32 NewUniqueRoutineType() { return routine_type_.fetch_add(1); }
+
+private:
+    std::atomic<uint32> routine_type_;
 };

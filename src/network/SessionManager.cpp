@@ -22,6 +22,12 @@ void SessionManager::Tick()
     TickSessions();
 }
 
+void SessionManager::Stop()
+{
+    ShutdownAll();
+    ClearAll();
+}
+
 void SessionManager::CheckSessions()
 {
     Session *session = nullptr;
@@ -35,11 +41,11 @@ void SessionManager::CheckSessions()
         if (sessions_.erase(session) != 0) {
             session->OnShutdownSession();
         }
-        if (session->IsMonopolizeConection()) {
+        if (session->IsMonopolizeConnection()) {
             session->DeleteObject();
             continue;
         }
-        const std::shared_ptr<Connection> &connection = session->GetConection();
+        const std::shared_ptr<Connection> &connection = session->GetConnection();
         if (connection->IsSendBufferEmpty() || session->IsShutdownExpired()) {
             if (connection->IsActive()) {
                 connection->Close();
@@ -78,7 +84,7 @@ void SessionManager::RemoveSession(Session *session)
 void SessionManager::KillSession(Session *session)
 {
     if (session->IsActive()) {
-        session->GetConection()->Close();
+        session->GetConnection()->Close();
         session->ShutdownSession();
     }
 }
@@ -103,8 +109,8 @@ void SessionManager::ShutdownAll()
 void SessionManager::ClearAll()
 {
     auto SafeSessionDeleter = [](Session *session) {
-        session->GetConection()->Close();
-        while (!session->IsMonopolizeConection())
+        session->GetConnection()->Close();
+        while (!session->IsMonopolizeConnection())
             OS::SleepMS(1);
         session->DeleteObject();
     };

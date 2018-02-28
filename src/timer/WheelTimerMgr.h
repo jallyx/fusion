@@ -2,6 +2,7 @@
 
 #include <list>
 #include <mutex>
+#include <thread>
 #include <vector>
 #include "Base.h"
 
@@ -16,6 +17,7 @@ public:
 
     void Update(uint64 curtime);
 
+    void RePush(WheelTimer *timer, uint64 next_active_time = 0);
     void Push(WheelTimer *timer, uint64 first_active_time = 0);
     void Pop(WheelTimer *timer);
 
@@ -29,6 +31,7 @@ private:
     void Relocate(std::list<WheelTimer*> &&pending_timer_list);
 
     const uint64 tick_particle_;
+    std::thread::id thread_id_;
 
     uint64 tick_count_;
     std::vector<size_t> pointer_slot_;
@@ -36,4 +39,6 @@ private:
 
     std::list<WheelTimer*> push_pool_, pop_pool_;
     std::mutex push_mutex_, pop_mutex_;
+
+    std::list<WheelTimer*> anchor_container_;
 };

@@ -9,6 +9,8 @@
     #define getpid GetCurrentProcessId
     #define localtime_r(_clock,_result) localtime_s(_result,_clock)
     #define gmtime_r(_clock,_result) gmtime_s(_result,_clock)
+    #define timezone _timezone
+    #define PATH_MAX MAX_PATH
 #endif
 
 #if defined(_WIN32)
@@ -49,7 +51,7 @@ namespace os {
 #define COUNT_OF_1(a) (sizeof(a)/sizeof(a[0]))
 #define COUNT_OF_2(a) (sizeof(a)/sizeof(a[0][0]))
 #define COUNT_OF_3(a) (sizeof(a)/sizeof(a[0][0][0]))
-#define ARRAY_SIZE(a) (std::extent<decltype(a)>::value)
+#define ARRAY_SIZE(a) (std::extent<typename std::remove_reference<decltype(a)>::type>::value)
 
 #define IS_INPTR_CONTAIN_VALUE(Array,Size,Value) \
     (std::find(Array,Array+Size,Value)!=Array+Size)

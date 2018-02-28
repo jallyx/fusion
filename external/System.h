@@ -1,6 +1,7 @@
 #pragma once
 
 #include <time.h>
+#include <random>
 #include "Base.h"
 #include "Macro.h"
 
@@ -29,6 +30,7 @@ private:
 #if defined(_WIN32)
     static LARGE_INTEGER performance_frequency_;
 #endif
+    static std::default_random_engine random_engine_;
 };
 
 #define GET_UNIX_TIME (System::GetUnixTime())

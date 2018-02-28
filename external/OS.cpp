@@ -3,6 +3,7 @@
 
 #if defined(_WIN32)
     #include <direct.h>
+    #pragma comment(lib, "Shlwapi.lib")
 #else
     #include <sys/stat.h>
     #include <netinet/in.h>

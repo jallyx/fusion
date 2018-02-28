@@ -46,10 +46,10 @@ inline AsyncTask *CreateAsyncTask(const std::function<void(T&)> &work,
         {}
     private:
         virtual void Finish(AsyncTaskOwner *owner) {
-            cb_(owner, msg_);
+            if (cb_) { cb_(owner, msg_); }
         }
         virtual void ExecuteInAsync() {
-            work_(msg_);
+            if (work_) { work_(msg_); }
         }
         const std::function<void(T&)> work_;
         const std::function<void(AsyncTaskOwner*, T&)> cb_;

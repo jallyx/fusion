@@ -14,31 +14,35 @@ template<typename T> inline std::string SaveToBinary(const T &entity) {
     return stream.str();
 }
 
-class streambuf_StaticBuffer : public std::streambuf {
+class streambuf_ConstBuffer : public std::streambuf {
 public:
-    streambuf_StaticBuffer(const void *dataptr, const void *endptr) {
+    streambuf_ConstBuffer(const void *dataptr, const void *endptr) {
         setg((char *)dataptr, (char *)dataptr, (char *)endptr);
     }
 private:
     virtual std::streamsize xsgetn(char *s, std::streamsize n) {
         std::streamsize size = std::min(n, in_avail());
         std::copy(gptr(), gptr() + size, s);
-        gbump(size);
+        gbump((int)size);
         return size;
     }
 };
-class istream_StaticBuffer : std::istream {
+class istream_ConstBuffer : public std::istream {
 public:
-    istream_StaticBuffer(const void *dataptr, const void *endptr)
+    istream_ConstBuffer(const void *dataptr, const void *endptr)
         : std::istream(&streambuf_), streambuf_(dataptr, endptr)
     {}
 private:
-    streambuf_StaticBuffer streambuf_;
+    streambuf_ConstBuffer streambuf_;
 };
 template <typename T>
-inline void LoadFromStaticBuffer(T &entity, const void *dataptr, const void *endptr) {
-    istream_StaticBuffer stream(dataptr, endptr);
+inline void LoadFromConstBuffer(T &entity, const void *dataptr, const void *endptr) {
+    istream_ConstBuffer stream(dataptr, endptr);
     LoadFromStream(entity, stream);
+}
+template <typename T>
+inline void LoadFromConstBuffer(T &entity, const void *dataptr, size_t size) {
+    LoadFromConstBuffer(entity, dataptr, (const char *)dataptr + size);
 }
 
 class streambuf_INetStream : public std::streambuf {
@@ -56,7 +60,7 @@ private:
     }
     virtual std::streamsize xsgetn(char *s, std::streamsize n) {
         std::streamsize size = std::min(n, in_avail());
-        stream_.Take(s, size);
+        stream_.Take(s, (size_t)size);
         return size;
     }
     virtual int_type overflow(int_type c) {
@@ -64,34 +68,26 @@ private:
         return c;
     }
     virtual std::streamsize xsputn(const char *s, std::streamsize n) {
-        stream_.Append(s, n);
+        stream_.Append(s, (size_t)n);
         return n;
     }
     INetStream &stream_;
 };
-class istream_INetStream : public std::istream {
+class iostream_INetStream : public std::istream, public std::ostream {
 public:
-    istream_INetStream(INetStream &stream)
-        : std::istream(&streambuf_), streambuf_(stream)
-    {}
-private:
-    streambuf_INetStream streambuf_;
-};
-class ostream_INetStream : public std::ostream {
-public:
-    ostream_INetStream(INetStream &stream)
-        : std::ostream(&streambuf_), streambuf_(stream)
+    iostream_INetStream(INetStream &stream)
+        : std::istream(&streambuf_), std::ostream(&streambuf_), streambuf_(stream)
     {}
 private:
     streambuf_INetStream streambuf_;
 };
 template <typename T>
-inline void LoadFromINetStream(T &entity, INetStream &stream) {
-    istream_INetStream stream(stream);
+inline void LoadFromINetStream(T &entity, INetStream &buffer) {
+    iostream_INetStream stream(buffer);
     LoadFromStream(entity, stream);
 }
 template <typename T>
-inline void SaveToINetStream(T &entity, INetStream &stream) {
-    ostream_INetStream stream(stream);
+inline void SaveToINetStream(const T &entity, INetStream &buffer) {
+    iostream_INetStream stream(buffer);
     SaveToStream(entity, stream);
 }

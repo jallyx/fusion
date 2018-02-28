@@ -59,7 +59,10 @@ class Parser:
         if (len(fields) != 2 and len(fields) != 3) or (len(fields) == 3 and fields[-1] != '{'):
             raise DataError, "not support syntax at line %s" % self.linenumber
         bstate = PARSE_STATE_BLOCK if len(fields) == 2 else PARSE_STATE_MEMBER
-        return {'type':btype, 'name':fields[1], 'members':self.__buildmembers(bstate, btype)}
+        bentity = {'type':btype, 'name':fields[1], 'members':self.__buildmembers(bstate, btype)}
+        if btype == ENTITY_TYPE_TABLE:
+            bentity.update(self.__decomposetablename(fields[1]))
+        return bentity
 
     def __buildmembers(self, state, btype):
         members = []
@@ -112,6 +115,14 @@ class Parser:
             member.update(self.__drawmembertail(fields[-1]))
         return member
 
+    def __decomposetablename(self, namedata):
+        begin = namedata.find('(')
+        if begin == -1: return {}
+        end = namedata.find(')', begin)
+        if end == -1 or end + 1 != len(namedata):
+            raise DataError, "invalid table name %s" % self.linenumber
+        return {'name':namedata[:begin], '(name)':namedata[begin+1:end]}
+
     def __drawmembertail(self, attrdata):
         attrs = {}
         if attrdata.startswith('='):
@@ -122,5 +133,5 @@ class Parser:
             attrs['comment'] = attrdata
         return attrs
 
-    def __throwmembererror(self, mtype):
+    def __throwfielderror(self, mtype):
         raise DataError, "%s member error at line %s" % (mtype, self.linenumber)

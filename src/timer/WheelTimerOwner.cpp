@@ -22,7 +22,7 @@ public:
     void DetachOwner()
     {
         if (!owner_.expired()) {
-            owner_.lock()->timer_list_.erase(itr_);
+            owner_.lock()->timers_.erase(itr_);
             owner_.reset();
         }
     }
@@ -33,8 +33,7 @@ protected:
     virtual bool OnPrepare()
     {
         if (owner_.expired()) return false;
-        std::list<Timer*> &tlist = owner_.lock()->timer_list_;
-        itr_ = tlist.insert(tlist.end(), this);
+        itr_ = owner_.lock()->timers_.emplace(type_, this);
         WheelTimer::OnPrepare();
         return true;
     }
@@ -54,7 +53,7 @@ private:
     const std::function<void()> cb_;
     const uint32 type_;
 
-    std::list<Timer*>::iterator itr_;
+    std::multimap<uint32, Timer*>::iterator itr_;
     std::weak_ptr<WheelTimerOwner> owner_;
 };
 
@@ -83,18 +82,18 @@ void WheelTimerOwner::CreateTimerX(const std::function<void()> &cb,
 }
 
 void WheelTimerOwner::RemoveTimers(uint32 type) {
-    RemoveRoutines(timer_list_, type);
+    RemoveRoutines(timers_, type);
 }
 void WheelTimerOwner::RemoveTimers() {
-    RemoveRoutines(timer_list_);
+    RemoveRoutines(timers_);
 }
 bool WheelTimerOwner::HasTimer(uint32 type) const {
-    return HasRoutine(timer_list_, type);
+    return HasRoutine(timers_, type);
 }
 bool WheelTimerOwner::HasTimer() const {
-    return HasRoutine(timer_list_);
+    return HasRoutine(timers_);
 }
 template <>
 WheelTimer *WheelTimerOwner::FindTimer(uint32 type) const {
-    return FindRoutine(timer_list_, type);
+    return FindRoutine(timers_, type);
 }

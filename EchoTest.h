@@ -52,7 +52,7 @@ public:
         return SessionHandleSuccess;
     }
     void SendSomePacket() {
-        if (!GetConection()->IsSendBufferEmpty()) {
+        if (!GetConnection()->IsSendBufferEmpty()) {
             if (System::Rand(0, 10000) < 9999)
                 return;
         }
@@ -72,7 +72,7 @@ public:
     static void New() {
         ProducerSession *session = new ProducerSession;
         session->SetConnection(sEchoConnectionManager.NewConnection(*session));
-        session->GetConection()->AsyncConnect(HOST_STRING, PORT_STRING);
+        session->GetConnection()->AsyncConnect(HOST_STRING, PORT_STRING);
         sEchoSessionManager.AddSession(session);
         sDataManager.producer_list_.insert(session);
     }
@@ -157,7 +157,7 @@ protected:
         return true;
     }
     virtual void StopServices() {
-        sEchoSessionManager.ShutdownAll();
+        sEchoSessionManager.Stop();
         sEchoConnectionManager.Stop();
         sEchoListener.Stop();
         sEchoServer.Stop();

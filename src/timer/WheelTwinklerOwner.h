@@ -5,12 +5,12 @@
 #include <functional>
 #include "enable_linked_from_this.h"
 
-class WheelTwinklerOwner : virtual private WheelRoutineOwner,
+class WheelTwinklerOwner : virtual protected WheelRoutineOwner,
     public enable_linked_from_this<WheelTwinklerOwner>
 {
 public:
     WheelTwinklerOwner();
-    virtual ~WheelTwinklerOwner();
+    ~WheelTwinklerOwner();
 
     void CreateTwinkler(TriggerCycle trigger_cycle, TriggerPoint trigger_point,
         time_t trigger_duration, const std::function<void()> &start_cb,
@@ -41,5 +41,5 @@ public:
 
 private:
     class Twinkler;
-    std::list<Twinkler*> twinkler_list_;
+    std::multimap<uint32, Twinkler*> twinklers_;
 };

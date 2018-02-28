@@ -1,24 +1,30 @@
 #pragma once
 
-#include <vector>
+#include <functional>
+#include "noncopyable.h"
 #include "lua/LuaRef.h"
 
-class GameObject;
+class AIObject;
 
-class AIBlackboard
+class AIBlackboard : public lua::binder, public noncopyable
 {
 public:
-    AIBlackboard(GameObject *game_object);
-    virtual ~AIBlackboard();
+    AIBlackboard();
+    ~AIBlackboard();
 
-    void SetGameObjectMeta(LuaRef &&game_object_meta);
-    void RefTreeNode(lua_State *L, int index);
+    template <typename T>
+    void SetObject(lua_State *L, T *object) {
+        lua::push<T*>::invoke(L, object);
+        ai_object_cache_ = LuaRef(L, true);
+        ai_object_ = object;
+    }
 
-    GameObject *game_object() const { return game_object_; }
-    const LuaRef &game_object_meta() const { return game_object_meta_; }
+    AIObject *object() const { return ai_object_; }
+    const LuaRef &object_cache() const { return ai_object_cache_; }
+
+    std::function<void(lua_State *L, int index)> RefTreeNode;
 
 private:
-    GameObject * const game_object_;
-    LuaRef game_object_meta_;
-    std::vector<LuaRef> tree_node_list_;
+    AIObject *ai_object_;
+    LuaRef ai_object_cache_;
 };

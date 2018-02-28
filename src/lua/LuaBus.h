@@ -2,7 +2,6 @@
 
 #include <cstring>
 #include <string>
-#include <memory>
 #include <lua.hpp>
 
 namespace lua {
@@ -19,30 +18,7 @@ void dobuffer(lua_State *L, const char *buff, size_t sz);
 // debug helpers
 void print_error(lua_State *L, const char *fmt, ...);
 int on_error(lua_State *L);
-
 void enum_stack(lua_State *L);
-
-// table object holder
-class table {
-public:
-    table(lua_State *L);
-    table(lua_State *L, int index);
-    table(lua_State *L, const char *name);
-
-    size_t len() const;
-    int index() const;
-    bool is_alive() const;
-
-    template<typename T> void set(int key, T object) const;
-    template<typename T> T get(int key) const;
-
-    template<typename T> void set(const char *key, T object) const;
-    template<typename T> T get(const char *key) const;
-
-private:
-    class table_obj;
-    std::shared_ptr<table_obj> obj_;
-};
 
 // class property
 template<typename T> struct class_property { static char name[]; };
@@ -97,7 +73,7 @@ inline void bind_proper_metatable(lua_State *L) {
 struct user {
     user(void *p) : obj(p) {}
     virtual ~user() {}
-    void * const obj;
+    void *obj;
 };
 
 // trace object handler
@@ -110,17 +86,17 @@ protected:
 // bind object handler
 class binder : public tracer {
 public:
-    bool try_push_this(lua_State *pL, const char *metaname) const;
-    void bind(lua_State *pL, const char *name) const;
-    void unbind(user *puser, const char *name) const;
+    bool try_push_this(lua_State *L, const char *metaname) const;
+    void bind(lua_State *L, const char *name);
+    void unbind(void *user, const char *name);
 protected:
-    binder() : L(nullptr), user_(nullptr) {}
+    binder() : L_(nullptr), user_(nullptr) {}
     ~binder() { on_destroy(); }
 private:
-    void register_this(lua_State *pL) const;
+    void register_this(lua_State *L) const;
     void on_destroy() const;
-    mutable lua_State *L;
-    mutable user *user_;
+    lua_State *L_;
+    user *user_;
 };
 
 // adapt object behavior
@@ -135,7 +111,7 @@ public:
         }
     };
     template<typename T> struct non_tracker_subclass {
-        static void *base(T *obj) { return obj; }
+        static void *base(T *obj) { return ((void*)obj); }
         static T *self(void *obj) { return reinterpret_cast<T*>(obj); }
     };
     template<typename T>
@@ -152,8 +128,8 @@ public:
     }
 
     template<typename T> struct binder_subclass {
-        static void bind(lua_State *pL, user *puser) {
-            self<T>(puser->obj)->bind(pL, puser, class_type<T>::name());
+        static void bind(lua_State *L, user *puser) {
+            self<T>(puser->obj)->bind(L, puser, class_type<T>::name());
         }
         static void unbind(user *puser) {
             if (puser->obj != nullptr) {
@@ -162,14 +138,14 @@ public:
         }
     };
     template<typename T> struct non_binder_subclass {
-        static void bind(lua_State *pL, user *puser) {}
+        static void bind(lua_State *L, user *puser) {}
         static void unbind(user *puser) {}
     };
     template<typename T>
-    static void bind(lua_State *pL, user *puser) {
+    static void bind(lua_State *L, user *puser) {
         return std::conditional<std::is_base_of<binder, T>::value,
                    binder_subclass<T>, non_binder_subclass<T>
-               >::type::bind(pL, puser);
+               >::type::bind(L, puser);
     }
     template<typename T>
     static void unbind(user *puser) {
@@ -295,7 +271,7 @@ struct ptr2lua {
                     binder2lua<T>, nonbinder2lua<T>
                 >::type::invoke(L, input);
             } else {
-                lua_pushlightuserdata(L, input);
+                lua_pushlightuserdata(L, (void*)input);
             }
         } else {
             lua_pushnil(L);
@@ -310,16 +286,16 @@ struct ref2lua {
                 binder2lua<T>, nonbinder2lua<T>
             >::type::invoke(L, &input);
         } else {
-            lua_pushlightuserdata(L, &input);
+            lua_pushlightuserdata(L, (void*)&input);
         }
     }
 };
 template<typename T>
 struct val2lua {
-    static void invoke(lua_State *L, T input) {
+    static void invoke(lua_State *L, T &&input) {
         std::conditional<std::is_base_of<binder, T>::value,
             binder2lua<T>, nonbinder2lua<T>
-        >::type::new_user_object(L, input);
+        >::type::new_user_object(L, std::forward<T>(input));
     }
 };
 
@@ -339,7 +315,7 @@ struct user2lua {
                 ref2lua<typename std::remove_reference<T>::type>,
                 val2lua<typename std::remove_reference<T>::type>
             >::type
-        >::type::invoke(L, val);
+        >::type::invoke(L, std::forward<T>(val));
     }
 };
 
@@ -365,6 +341,11 @@ struct read {
 
 #define READ_VALUE_FROM_LUA_STACK(TYPE,FUNC) \
     template<> struct read<TYPE> { \
+        static TYPE invoke(lua_State *L, int index) { \
+            return static_cast<TYPE>(FUNC(L, index)); \
+        } \
+    }; \
+    template<> struct read<const TYPE> { \
         static TYPE invoke(lua_State *L, int index) { \
             return static_cast<TYPE>(FUNC(L, index)); \
         } \
@@ -408,7 +389,7 @@ struct read {
             INSTRUCTIONS; \
         } \
     }; \
-    template<> struct read<TYPE &> { \
+    template<> struct read<const TYPE> { \
         static TYPE invoke(lua_State *L, int index) { \
             INSTRUCTIONS; \
         } \
@@ -431,9 +412,6 @@ struct read {
         s.str = lua_tolstring(L, index, &s.len);
         return s;
     }while(0))
-    READ_VALUE_FROM_LUA_STACK(table, do{
-        return table(L, index);
-    }while(0))
 #undef READ_VALUE_FROM_LUA_STACK
 
 // push a value to lua stack
@@ -443,12 +421,17 @@ struct push {
         std::conditional<std::is_enum<T>::value,
             enum2lua<T>,
             user2lua<T>
-        >::type::invoke(L, val);
+        >::type::invoke(L, std::forward<T>(val));
     }
 };
 
 #define PUSH_VALUE_TO_LUA_STACK(CTYPE,LTYPE,FUNC) \
     template<> struct push<CTYPE> { \
+        static void invoke(lua_State *L, CTYPE val) { \
+            FUNC(L, static_cast<LTYPE>(val)); \
+        } \
+    }; \
+    template<> struct push<const CTYPE> { \
         static void invoke(lua_State *L, CTYPE val) { \
             FUNC(L, static_cast<LTYPE>(val)); \
         } \
@@ -494,7 +477,7 @@ struct push {
             INSTRUCTIONS; \
         } \
     }; \
-    template<> struct push<TYPE &> { \
+    template<> struct push<const TYPE> { \
         static void invoke(lua_State *L, const TYPE &val) { \
             INSTRUCTIONS; \
         } \
@@ -510,13 +493,6 @@ struct push {
     PUSH_VALUE_TO_LUA_STACK(sstr, do{
         lua_pushlstring(L, val.str, val.len);
     }while(0))
-    PUSH_VALUE_TO_LUA_STACK(table, do{
-        if (val.is_alive()) {
-            lua_pushvalue(L, val.index());
-        } else {
-            lua_pushnil(L);
-        }
-    }while(0))
 #undef PUSH_VALUE_TO_LUA_STACK
 
 // pop a value from lua stack
@@ -526,11 +502,6 @@ struct pop {
         T t = read<T>::invoke(L, -1);
         lua_pop(L, 1);
         return t;
-    }
-};
-template<> struct pop<table> {
-    static table invoke(lua_State *L) {
-        return table(L, lua_gettop(L));
     }
 };
 template<> struct pop<void> {
@@ -553,11 +524,10 @@ T get(lua_State *L, const char *name){
 }
 
 // call lua function
-inline void push_args(lua_State *L) {}
-template<typename T, typename... Args>
-void push_args(lua_State *L, T&& value, Args&&... args) {
-    push<T>::invoke(L, value);
-    push_args(L, std::forward<Args>(args)...);
+template<typename... Args>
+void push_args(lua_State *L, Args&&... args) {
+    using swallow = int[];
+    swallow{0, (push<Args>::invoke(L, std::forward<Args>(args)), 0)...};
 }
 
 template<typename RVal, typename... Args>
@@ -741,14 +711,26 @@ public:
     virtual void get(lua_State *L) {
         push<type>::invoke(L, read<T*>::invoke(L, 1)->*var_);
     }
+    struct setter {
+        static void invoke(lua_State *L, V T::*var) {
+            read<T*>::invoke(L, 1)->*var = read<type>::invoke(L, 3);
+        }
+    };
+    struct noop_setter {
+        static void invoke(lua_State *L, V T::*var) {
+        }
+    };
     virtual void set(lua_State *L) {
-        read<T*>::invoke(L, 1)->*var_ = read<type>::invoke(L, 3);
+        std::conditional<std::is_copy_assignable<V>::value,
+            setter, noop_setter
+        >::type::invoke(L, var_);
     }
 private:
     V T::*var_;
 };
 
 // class helper
+void register_constructor(lua_State *L, const char *name);
 void register_prototype(lua_State *L, const char *name);
 void register_parent(lua_State *L, const char *name, const char *parent);
 
@@ -783,14 +765,14 @@ void class_cast(lua_State *L) {
 template<typename T, typename F>
 void class_con(lua_State *L, F func) {
     push_metatable(L, class_type<T>::name());
-    if (lua_istable(L, -1)) {
-        lua_newtable(L);
-        lua_pushliteral(L, "__call");
-        lua_pushcfunction(L, func);
-        lua_rawset(L, -3);
-        lua_setmetatable(L, -2);
-    }
-    lua_pop(L, 1);
+    lua_pushcfunction(L, func);
+    register_constructor(L, nullptr);
+}
+template<typename F>
+void class_con(lua_State *L, const char *name, F func) {
+    luaL_newmetatable(L, name);
+    lua_pushcfunction(L, func);
+    register_constructor(L, name);
 }
 
 // class functions
@@ -815,74 +797,6 @@ void class_mem(lua_State *L, const char *name, VAR BASE::*val) {
         lua_rawset(L, -3);
     }
     lua_pop(L, 1);
-}
-
-// table object on stack
-class table::table_obj {
-public:
-    table_obj(lua_State *L, int index);
-    ~table_obj();
-
-    size_t len() const;
-
-    int index() const { return index_; }
-    bool is_alive() const {
-        return pointer_ != nullptr &&
-               pointer_ == lua_topointer(L, index_) &&
-               lua_istable(L, index_);
-    }
-
-    template<typename T> void set(int key, T object) const {
-        if (is_alive()) {
-            push<T>::invoke(L, object);
-            lua_seti(L, index_, key);
-        }
-    }
-    template<typename T> T get(int key) const {
-        if (is_alive()) {
-            lua_geti(L, index_, key);
-        } else {
-            lua_pushnil(L);
-        }
-        return pop<T>::invoke(L);
-    }
-
-    template<typename T> void set(const char *key, T object) const {
-        if (is_alive()) {
-            push<T>::invoke(L, object);
-            lua_setfield(L, index_, key);
-        }
-    }
-    template<typename T> T get(const char *key) const {
-        if (is_alive()) {
-            lua_getfield(L, index_, key);
-        } else {
-            lua_pushnil(L);
-        }
-        return pop<T>::invoke(L);
-    }
-
-private:
-    lua_State *L;
-    int index_;
-    const void *pointer_;
-};
-
-// table object holder functions
-inline size_t table::len() const { return obj_->len(); }
-inline int table::index() const { return obj_->index(); }
-inline bool table::is_alive() const { return obj_->is_alive(); }
-template<typename T> void table::set(int key, T object) const {
-    obj_->set<T>(key, object);
-}
-template<typename T> T table::get(int key) const {
-    return obj_->get<T>(key);
-}
-template<typename T> void table::set(const char *key, T object) const {
-    obj_->set<T>(key, object);
-}
-template<typename T> T table::get(const char *key) const {
-    return obj_->get<T>(key);
 }
 
 }

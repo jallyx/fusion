@@ -122,6 +122,11 @@ unsigned int MysqlConnection::GetLastErrno() const
     return mysql_errno(mysql_);
 }
 
+const char *MysqlConnection::GetLastError() const
+{
+    return mysql_error(mysql_);
+}
+
 bool MysqlConnection::CallSql(const char *sql) const
 {
     if (mysql_ == nullptr) {

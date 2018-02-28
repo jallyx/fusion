@@ -12,7 +12,12 @@ public:
 
     int SetExternalPrecondition(lua_State *L);
 
-    bool Evaluate();
+    enum PathValue {
+        Unreachable,
+        Reachable,
+        Runnable,
+    };
+    PathValue Evaluate();
 
     enum Status {
         Idle,

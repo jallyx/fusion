@@ -11,6 +11,8 @@ Session::Session(bool isDeflatePacket, bool isInflatePacket, bool isRapidMode)
 , status_(Idle)
 , manager_(nullptr)
 , send_buffer_(nullptr)
+, event_observer_(nullptr)
+, is_overstocked_packet_(false)
 , overflow_packet_count_(0)
 , shutdown_time_(-1)
 , last_recv_pck_time_(GET_SYS_TIME)
@@ -33,6 +35,9 @@ void Session::Update()
             while (IsActive() && recv_queue_.Dequeue(pck)) {
                 switch (HandlePacket(pck)) {
                 case SessionHandleSuccess:
+                    break;
+                case SessionHandleCapture:
+                    pck = nullptr;
                     break;
                 case SessionHandleUnhandle:
                     DLOG("SessionHandleUnhandle opcode[%u].", pck->GetOpcode());
@@ -76,17 +81,39 @@ void Session::SetConnection(std::shared_ptr<Connection> &&connPtr)
     send_buffer_ = connection_->GetSendBuffer<ISendBuffer>();
 }
 
-const std::shared_ptr<Connection> &Session::GetConection() const
+const std::shared_ptr<Connection> &Session::GetConnection() const
 {
     return connection_;
 }
 
-bool Session::IsMonopolizeConection() const
+bool Session::IsMonopolizeConnection() const
 {
     return connection_.unique();
 }
 
-void Session::ResetShutdownFlag()
+void Session::DeleteObject()
+{
+    delete this;
+}
+
+const std::string &Session::GetHost() const
+{
+    return connection_->addr();
+}
+
+unsigned long Session::GetIPv4() const
+{
+    asio::ip::address addr;
+    addr.from_string(connection_->addr().c_str());
+    return addr.is_v4() ? addr.to_v4().to_ulong() : 0;
+}
+
+unsigned short Session::GetPort() const
+{
+    return connection_->port();
+}
+
+void Session::ClearShutdownFlag()
 {
     shutdown_time_.store(-1);
 }
@@ -100,6 +127,16 @@ bool Session::GrabShutdownFlag()
 bool Session::IsShutdownExpired() const
 {
     return shutdown_time_.load() + 30 < GET_UNIX_TIME;
+}
+
+void Session::SetEventObserver(IEventObserver *observer)
+{
+    event_observer_ = observer;
+}
+
+void Session::ClearPacketOverstockFlag()
+{
+    is_overstocked_packet_ = false;
 }
 
 void Session::KillSession()
@@ -116,9 +153,21 @@ void Session::ShutdownSession()
     }
 }
 
-void Session::DeleteObject()
+void Session::OnShutdownSession()
 {
-    delete this;
+    ClearRecvPacket();
+    if (event_observer_ != nullptr) {
+        event_observer_->OnShutdownSession(this);
+    }
+}
+
+void Session::OnRecvPacket(INetPacket *pck)
+{
+    recv_queue_.Enqueue(pck);
+    if (!is_overstocked_packet_ && event_observer_ != nullptr) {
+        is_overstocked_packet_ = true;
+        event_observer_->OnRecvPacket(this);
+    }
 }
 
 void Session::PushRecvPacket(INetPacket *pck)
@@ -127,7 +176,7 @@ void Session::PushRecvPacket(INetPacket *pck)
         if (pck->GetOpcode() == OPCODE_LARGE_PACKET) {
             PushRecvFragmentPacket(pck);
         } else {
-            recv_queue_.Enqueue(pck);
+            OnRecvPacket(pck);
         }
         last_recv_pck_time_ = GET_SYS_TIME;
     } else {
@@ -137,7 +186,7 @@ void Session::PushRecvPacket(INetPacket *pck)
 
 void Session::PushSendPacket(const INetPacket &pck)
 {
-    if (IsActive()) {
+    if (IsActive() && connection_) {
         if (pck.GetReadableSize() > INetPacket::MAX_BUFFER_SIZE) {
             PushSendOverflowPacket(pck);
         } else {
@@ -150,7 +199,7 @@ void Session::PushSendPacket(const INetPacket &pck)
 
 void Session::PushSendPacket(const char *data, size_t size)
 {
-    if (IsActive()) {
+    if (IsActive() && connection_) {
         send_buffer_->WritePacket(data, size);
         connection_->PostWriteRequest();
         last_send_pck_time_ = GET_SYS_TIME;
@@ -159,7 +208,7 @@ void Session::PushSendPacket(const char *data, size_t size)
 
 void Session::PushSendPacket(const INetPacket &pck, const INetPacket &data)
 {
-    if (IsActive()) {
+    if (IsActive() && connection_) {
         send_buffer_->WritePacket(pck, data);
         connection_->PostWriteRequest();
         last_send_pck_time_ = GET_SYS_TIME;
@@ -168,7 +217,7 @@ void Session::PushSendPacket(const INetPacket &pck, const INetPacket &data)
 
 void Session::PushSendPacket(const INetPacket &pck, const char *data, size_t size)
 {
-    if (IsActive()) {
+    if (IsActive() && connection_) {
         send_buffer_->WritePacket(pck, data, size);
         connection_->PostWriteRequest();
         last_send_pck_time_ = GET_SYS_TIME;
@@ -206,7 +255,7 @@ void Session::PushRecvFragmentPacket(INetPacket *pck)
             delete pck;
         }
         if (packet_total_size < INetPacket::MAX_BUFFER_SIZE) {
-            recv_queue_.Enqueue(&LargePacketHelper::UnpackPacket(*packet));
+            OnRecvPacket(&LargePacketHelper::UnpackPacket(*packet));
             fragment_packets_.erase(number);
         }
     } while (0);

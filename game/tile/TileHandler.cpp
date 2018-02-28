@@ -1,7 +1,5 @@
 #include "TileHandler.h"
-#include "MapTile.h"
 #include "Exception.h"
-#include <string.h>
 
 TileHandler::TileHandler(const TileDefine &tile_define)
 : tile_define_(tile_define)
@@ -42,11 +40,11 @@ MapTile *TileHandler::CreateAndGetTile(size_t x, size_t z)
         }
         if (tiles_ == nullptr) {
             tiles_ = new MapTile**[tile_define_.x_size()];
-            memset(tiles_, 0, sizeof(MapTile**) * tile_define_.x_size());
+            std::fill_n(tiles_, tile_define_.x_size(), nullptr);
         }
         if (tiles_[x] == nullptr) {
             tiles_[x] = new MapTile*[tile_define_.z_size()];
-            memset(tiles_, 0, sizeof(MapTile*) * tile_define_.z_size());
+            std::fill_n(tiles_[x], tile_define_.z_size(), nullptr);
         }
         tile = tiles_[x][z] = new MapTile(this, x, z);
     }
@@ -65,4 +63,12 @@ MapTile *TileHandler::CreateAndGetTileByCoords(float x, float z)
     const size_t tile_x = tile_define_.CoordsToTileX(x);
     const size_t tile_z = tile_define_.CoordsToTileZ(z);
     return CreateAndGetTile(tile_x, tile_z);
+}
+
+void TileHandler::TryRecycleTile(MapTile *tile)
+{
+    if (tile != nullptr && tile->empty()) {
+        tiles_[tile->x()][tile->z()] = nullptr;
+        delete tile;
+    }
 }

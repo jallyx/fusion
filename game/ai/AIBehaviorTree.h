@@ -1,30 +1,27 @@
 #pragma once
 
-#include "AIBlackboard.h"
+#include <vector>
+#include "noncopyable.h"
+#include "lua/LuaRef.h"
 
 class AINodeBase;
 
-class AIBehaviorTree
+class AIBehaviorTree : public noncopyable
 {
 public:
-    AIBehaviorTree(AIBlackboard &blackboard);
+    AIBehaviorTree();
     ~AIBehaviorTree();
 
     int SetRootNode(lua_State *L);
 
-    void Update();
+    void RefTreeNode(lua_State *L, int index);
 
-    template <typename T>
-    void SetGameObjectMeta(lua_State *L) {
-        lua::push<T*>::invoke(L, dynamic_cast<T*>(blackboard_.game_object()));
-        blackboard_.SetGameObjectMeta(LuaRef(L, true));
-    }
+    void Run();
+    void Interrupt();
 
-    static void InitBehaviorTree(lua_State *L);
-
-    AIBlackboard &blackboard() { return blackboard_; }
+    bool IsRunnable() const { return root_node_ != nullptr; }
 
 private:
-    AIBlackboard &blackboard_;
     AINodeBase *root_node_;
+    std::vector<LuaRef> tree_node_list_;
 };

@@ -12,16 +12,16 @@ class HttpMgr : public Thread, public Singleton<HttpMgr>
 public:
     THREAD_RUNTIME(HttpMgr)
 
-    class Observer {
+    class ITaskObserver {
     public:
-        virtual void UpdateSubject(void *task, int error) = 0;
+        virtual void UpdateTaskStatus(void *task, int error) = 0;
     };
 
     HttpMgr();
     virtual ~HttpMgr();
 
-    HttpClient *AppendTask(Observer *observer, const char *url, const char *filepath);
-    void AppendTask(Observer *observer, HttpClient *client);
+    HttpClient *AppendTask(ITaskObserver *observer, const char *url, const char *filepath);
+    void AppendTask(ITaskObserver *observer, HttpClient *client);
     void RemoveTask(HttpClient *client, bool deletable);
     void WakeWorker();
 
@@ -36,8 +36,8 @@ private:
 
     int pipefd_[2];
     std::unordered_set<HttpClient*> client_list_;
-    std::unordered_map<HttpClient*, Observer*> observer_list_;
-    ThreadSafeQueue<std::pair<HttpClient*, Observer*>> waiting_room_;
+    std::unordered_map<HttpClient*, ITaskObserver*> observer_list_;
+    ThreadSafeQueue<std::pair<HttpClient*, ITaskObserver*>> waiting_room_;
     ThreadSafeQueue<std::pair<HttpClient*, bool>> recycle_bin_;
 };
 

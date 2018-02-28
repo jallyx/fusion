@@ -5,12 +5,12 @@
 #include <functional>
 #include "enable_linked_from_this.h"
 
-class WheelTriggerOwner : virtual private WheelRoutineOwner,
+class WheelTriggerOwner : virtual protected WheelRoutineOwner,
     public enable_linked_from_this<WheelTriggerOwner>
 {
 public:
     WheelTriggerOwner();
-    virtual ~WheelTriggerOwner();
+    ~WheelTriggerOwner();
 
     void CreateTrigger(TriggerCycle trigger_cycle, TriggerPoint trigger_point,
         const std::function<void()> &cb, uint32 type, uint32 repeats = 0);
@@ -30,5 +30,5 @@ public:
 
 private:
     class Trigger;
-    std::list<Trigger*> trigger_list_;
+    std::multimap<uint32, Trigger*> triggers_;
 };

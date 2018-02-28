@@ -1,5 +1,11 @@
 #pragma once
 
+class fakelock {
+public:
+    void lock() {}
+    void unlock() {}
+};
+
 #if defined(_WIN32)
     #include <concrt.h>
     class spinlock {

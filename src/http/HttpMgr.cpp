@@ -85,7 +85,7 @@ void HttpMgr::Finish()
     pipefd_[1] = pipefd_[0] = INVALID_SOCKET;
 }
 
-HttpClient *HttpMgr::AppendTask(Observer *observer, const char *url, const char *filepath)
+HttpClient *HttpMgr::AppendTask(ITaskObserver *observer, const char *url, const char *filepath)
 {
     HttpClient *client = new HttpClient;
     client->SetResource(url, nullptr, nullptr);
@@ -94,7 +94,7 @@ HttpClient *HttpMgr::AppendTask(Observer *observer, const char *url, const char 
     return client;
 }
 
-void HttpMgr::AppendTask(Observer *observer, HttpClient *client)
+void HttpMgr::AppendTask(ITaskObserver *observer, HttpClient *client)
 {
     waiting_room_.Enqueue(std::make_pair(client, observer));
     WakeWorker();
@@ -113,7 +113,7 @@ void HttpMgr::WakeWorker()
 
 void HttpMgr::CheckClients()
 {
-    std::pair<HttpClient*, Observer*> wrpair;
+    std::pair<HttpClient*, ITaskObserver*> wrpair;
     while (waiting_room_.Dequeue(wrpair)) {
         client_list_.insert(wrpair.first);
         if (wrpair.second != nullptr)
@@ -175,7 +175,7 @@ void HttpMgr::UpdateClients()
         if (client->error() != HttpClient::ErrorNone) {
             auto iterator = observer_list_.find(client);
             if (iterator != observer_list_.end())
-                iterator->second->UpdateSubject(client, client->error());
+                iterator->second->UpdateTaskStatus(client, client->error());
         }
     }
 }

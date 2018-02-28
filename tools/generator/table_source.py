@@ -5,14 +5,16 @@ from table_exporter import *
 
 def to_cplusplus_source(indir, outdir):
     def generate_files(indir, outdir, filename):
-        print "cplusplus %s ..." % os.path.abspath(os.path.join(indir, filename))
-        helper, utils = '#include "jsontable/table_helper.h"', '#include "jsontable/table_utils.h"'
-        entities = Parser().Parse(os.path.join(indir, filename))
         filepart = os.path.splitext(filename)[0]
-        outpath = os.path.join(outdir, filepart)
-        GeneratorH().Generate(entities, outpath+'.h', '#pragma once\n\n')
-        GeneratorCPP().Generate(entities, outpath+'.cpp', '%s\n#include "%s.h"\n' % (helper, filepart))
-        GeneratorHelperCPP().Generate(entities, outpath+'_helper.cpp', '%s\n%s\n#include "%s.h"\n' % (helper, utils, filepart))
+        outpath = os.path.abspath(os.path.join(outdir, filepart))
+        infile = os.path.abspath(os.path.join(indir, filename))
+        if not os.path.exists(outpath+'.h') or os.stat(outpath+'.h').st_mtime < os.stat(infile).st_mtime:
+            print "cplusplus %s ..." % infile
+            includes = '#include "jsontable/table_helper.h"\n#include "%s.h"\n' % filepart
+            entities = Parser().Parse(infile)
+            GeneratorH().Generate(entities, outpath+'.h', '#pragma once\n\n')
+            GeneratorCPP().Generate(entities, outpath+'.cpp', includes)
+            GeneratorHelperCPP().Generate(entities, outpath+'_helper.cpp', includes)
 
     if not os.path.exists(indir):
         return False

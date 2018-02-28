@@ -1,6 +1,8 @@
 #include "AsyncTaskMgr.h"
 #include "AsyncWorkingThread.h"
 
+std::weak_ptr<AsyncTaskOwner> AsyncTaskMgr::null_owner_;
+
 AsyncTaskMgr::AsyncTaskMgr()
 : worker_count_(2)
 {
@@ -21,7 +23,7 @@ bool AsyncTaskMgr::Prepare()
 
 void AsyncTaskMgr::Finish()
 {
-    std::pair<AsyncTask*, AsyncTaskOwner*> pair;
+    std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair;
     while (tasks_.Dequeue(pair)) {
         delete pair.first;
     }
@@ -53,14 +55,22 @@ bool AsyncTaskMgr::WaitTask(const void *queue)
 
 void AsyncTaskMgr::AddTask(AsyncTask *task, AsyncTaskOwner *owner)
 {
-    if (owner != nullptr) owner->AddSubject(task);
-    tasks_.Enqueue(std::make_pair(task, owner));
+    std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair(task, null_owner_);
+    if (owner != nullptr) {
+        owner->AddSubject(task);
+        pair.second = owner->linked_from_this();
+    }
+    tasks_.Enqueue(pair);
     cv_.notify_one();
 }
 
 void AsyncTaskMgr::AddHeavyTask(AsyncTask *task, AsyncTaskOwner *owner)
 {
-    if (owner != nullptr) owner->AddSubject(task);
-    heavy_tasks_.Enqueue(std::make_pair(task, owner));
+    std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair(task, null_owner_);
+    if (owner != nullptr) {
+        owner->AddSubject(task);
+        pair.second = owner->linked_from_this();
+    }
+    heavy_tasks_.Enqueue(pair);
     heavy_cv_.notify_one();
 }

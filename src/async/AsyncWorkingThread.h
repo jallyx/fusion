@@ -11,12 +11,13 @@ class AsyncWorkingThread : public Thread
 public:
     THREAD_RUNTIME(AsyncWorkingThread)
 
-    AsyncWorkingThread(ThreadSafeQueue<std::pair<AsyncTask*, AsyncTaskOwner*>> &tasks);
+    AsyncWorkingThread(
+        ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> &tasks);
     virtual ~AsyncWorkingThread();
 
 protected:
     virtual void Kernel();
 
 private:
-    ThreadSafeQueue<std::pair<AsyncTask*, AsyncTaskOwner*>> &tasks_;
+    ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> &tasks_;
 };

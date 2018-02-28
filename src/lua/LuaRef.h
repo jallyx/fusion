@@ -21,7 +21,7 @@ public:
     }
 
     ~LuaRef() {
-        if (ref_ != LUA_NOREF) {
+        if (isref()) {
             luaL_unref(L, LUA_REGISTRYINDEX, ref_);
         }
     }
@@ -32,13 +32,14 @@ public:
     }
 
     LuaRef &operator=(LuaRef &&other) {
-        this->~LuaRef();
-        new(this) LuaRef(std::move(other));
+        this->~LuaRef(), new(this) LuaRef(std::move(other));
         return *this;
     }
 
+    lua_State *getL() const { return L; }
+
     bool isref() const {
-        return ref_ != LUA_NOREF;
+        return ref_ != LUA_NOREF && ref_ != LUA_REFNIL;
     }
 
     void getref() const {
@@ -132,17 +133,53 @@ private:
 
 namespace lua {
 
+template<> struct pop<LuaRef> {
+    static LuaRef invoke(lua_State *L) {
+        return LuaRef(L, true);
+    }
+};
+template<> struct pop<const LuaRef> {
+    static LuaRef invoke(lua_State *L) {
+        return LuaRef(L, true);
+    }
+};
+template<> struct pop<const LuaRef &> {
+    static LuaRef invoke(lua_State *L) {
+        return LuaRef(L, true);
+    }
+};
+template<> struct pop<LuaRef &&> {
+    static LuaRef invoke(lua_State *L) {
+        return LuaRef(L, true);
+    }
+};
+template<> struct pop<const LuaRef &&> {
+    static LuaRef invoke(lua_State *L) {
+        return LuaRef(L, true);
+    }
+};
+
 template<> struct read<LuaRef> {
     static LuaRef invoke(lua_State *L, int index) {
         return LuaRef(L, index);
     }
 };
-template<> struct read<LuaRef &> {
+template<> struct read<const LuaRef> {
     static LuaRef invoke(lua_State *L, int index) {
         return LuaRef(L, index);
     }
 };
 template<> struct read<const LuaRef &> {
+    static LuaRef invoke(lua_State *L, int index) {
+        return LuaRef(L, index);
+    }
+};
+template<> struct read<LuaRef &&> {
+    static LuaRef invoke(lua_State *L, int index) {
+        return LuaRef(L, index);
+    }
+};
+template<> struct read<const LuaRef &&> {
     static LuaRef invoke(lua_State *L, int index) {
         return LuaRef(L, index);
     }
@@ -153,12 +190,27 @@ template<> struct push<LuaRef> {
         val.isref() ? val.getref() : lua_pushnil(L);
     }
 };
+template<> struct push<const LuaRef> {
+    static void invoke(lua_State *L, const LuaRef &val) {
+        val.isref() ? val.getref() : lua_pushnil(L);
+    }
+};
 template<> struct push<LuaRef &> {
     static void invoke(lua_State *L, const LuaRef &val) {
         val.isref() ? val.getref() : lua_pushnil(L);
     }
 };
 template<> struct push<const LuaRef &> {
+    static void invoke(lua_State *L, const LuaRef &val) {
+        val.isref() ? val.getref() : lua_pushnil(L);
+    }
+};
+template<> struct push<LuaRef &&> {
+    static void invoke(lua_State *L, const LuaRef &val) {
+        val.isref() ? val.getref() : lua_pushnil(L);
+    }
+};
+template<> struct push<const LuaRef &&> {
     static void invoke(lua_State *L, const LuaRef &val) {
         val.isref() ? val.getref() : lua_pushnil(L);
     }

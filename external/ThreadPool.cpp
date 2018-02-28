@@ -35,6 +35,27 @@ void ThreadPool::Stop()
     ClearThreads();
 }
 
+void ThreadPool::Resume()
+{
+    for (auto thread : threads_) {
+        thread->Resume();
+    }
+}
+
+void ThreadPool::Pause()
+{
+    for (auto thread : threads_) {
+        thread->Pause();
+    }
+}
+
+void ThreadPool::Foreach(const std::function<void(Thread*)> &func) const
+{
+    for (auto thread : threads_) {
+        func(thread);
+    }
+}
+
 void ThreadPool::PushThread(Thread *thread)
 {
     threads_.push_back(thread);

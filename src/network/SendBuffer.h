@@ -24,6 +24,15 @@ public:
         FreeBuffer(out_buffer_);
     }
 
+    virtual size_t GetDataSize() const {
+        size_t size = 0;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (out_buffer_) size += out_buffer_->GetReadableSize();
+        if (in_buffer_) size += in_buffer_->GetReadableSize();
+        for (auto buffer : in_buffers_) size += buffer->GetReadableSize();
+        return size;
+    }
+
     bool IsEmpty() const {
         std::lock_guard<std::mutex> lock(mutex_);
         if (out_buffer_ && !out_buffer_->IsReadableEmpty())
@@ -39,7 +48,7 @@ public:
             out_buffer_->Clear();
         if (in_buffer_ != nullptr)
             in_buffer_->Clear();
-        for (; !in_buffers_.empty(); in_buffers_.pop()) {
+        for (; !in_buffers_.empty(); in_buffers_.pop_front()) {
             FreeBuffer(in_buffers_.front());
         }
     }
@@ -59,7 +68,7 @@ public:
                 if (out_buffer_ != nullptr)
                     FreeBuffer(out_buffer_);
                 out_buffer_ = in_buffers_.front();
-                in_buffers_.pop();
+                in_buffers_.pop_front();
             }
         } while (0);
         if (out_buffer_ && !out_buffer_->IsReadableEmpty()) {
@@ -119,14 +128,14 @@ private:
                 in_buffer_->Append(data + offset, length);
                 offset += length;
             } else {
-                in_buffers_.push(in_buffer_);
+                in_buffers_.push_back(in_buffer_);
                 in_buffer_ = nullptr;
             }
         }
     }
 
     typedef TNetBuffer<65536> DataBuffer;
-    std::queue<DataBuffer*> in_buffers_;
+    std::deque<DataBuffer*> in_buffers_;
     DataBuffer *in_buffer_;
     DataBuffer *out_buffer_;
     mutable std::mutex mutex_;
@@ -151,7 +160,7 @@ private:
         return new DataBuffer();
     }
     static void FreeBuffer(DataBuffer *buffer) {
-        if (!buffer_pool_.Put(buffer)) {
+        if (buffer != nullptr && !buffer_pool_.Put(buffer)) {
             delete buffer;
         }
     }

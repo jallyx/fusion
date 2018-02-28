@@ -1,8 +1,7 @@
 #pragma once
 
 #include "TileDefine.h"
-
-class MapTile;
+#include "MapTile.h"
 
 class TileHandler
 {
@@ -14,6 +13,10 @@ public:
     MapTile *CreateAndGetTile(size_t x, size_t z);
     MapTile *GetTileByCoords(float x, float z) const;
     MapTile *CreateAndGetTileByCoords(float x, float z);
+
+    void TryRecycleTile(MapTile *tile);
+
+    const TileDefine &tile_define() const { return tile_define_; }
 
 private:
     const TileDefine &tile_define_;

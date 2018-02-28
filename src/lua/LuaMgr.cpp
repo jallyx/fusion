@@ -11,36 +11,62 @@ LuaMgr::~LuaMgr()
 {
 }
 
+int LuaMgr::LoadFile(lua_State *L, const std::string &fileName)
+{
+    int errcode = CacheFile(L, fileName);
+    if (errcode != 0) {
+        ELOG("LoadFile[%s] error: %s.", fileName.c_str(), lua_tostring(L, -1));
+        lua_pop(L, 1);
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
 bool LuaMgr::DoFile(lua_State *L, const std::string &fileName)
 {
+    lua_pushcfunction(L, lua::on_error);
+    int errfunc = lua_gettop(L);
+    int errcode = CacheFile(L, fileName);
+    if (errcode == 0) {
+        lua_pcall(L, 0, 1, errfunc);
+    } else {
+        ELOG("DoFile[%s] error: %s.", fileName.c_str(), lua_tostring(L, -1));
+    }
+    lua_pop(L, 2);
+    return errcode == 0;
+}
+
+void LuaMgr::DoFileEnv(lua_State *L, const char *fileName)
+{
+    if (LuaMgr::instance() != NULL) {
+        sLuaMgr.DoFile(L, fileName);
+    } else {
+        lua::dofile(L, fileName);
+    }
+}
+
+int LuaMgr::CacheFile(lua_State *L, const std::string &fileName)
+{
     std::string chunk;
-    bool isCached = false;
     do {
         rwlock_.rdlock();
         std::lock_guard<rwlock> lock(rwlock_, std::adopt_lock);
         auto iterator = chunks_.find(fileName);
         if (iterator != chunks_.end()) {
             chunk = iterator->second;
-            isCached = true;
         }
     } while (0);
 
-    lua_pushcfunction(L, lua::on_error);
-    int errfunc = lua_gettop(L);
-    int errcode = isCached ?
+    int errcode = !chunk.empty() ?
         luaL_loadbuffer(L, chunk.data(), chunk.size(), fileName.c_str()) :
         luaL_loadfile(L, fileName.c_str());
     if (errcode == 0) {
-        if (!isCached) {
+        if (chunk.empty()) {
             DumpChunk(L, fileName);
         }
-        lua_pcall(L, 0, 1, errfunc);
-    } else {
-        ELOG("dofile[%s] error: %s.", fileName.c_str(), lua_tostring(L, -1));
     }
-    lua_pop(L, 2);
 
-    return errcode == 0;
+    return errcode;
 }
 
 void LuaMgr::DumpChunk(lua_State *L, const std::string &fileName)

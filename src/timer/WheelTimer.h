@@ -17,12 +17,15 @@ public:
     uint64 GetCurrentTickTime() const;
     uint64 GetNextActiveTime() const;
 
+    uint32 GetRemainder() const { return loop_count_; }
+
 protected:
     virtual ~WheelTimer();
     virtual bool OnPrepare() { return true; }
     virtual void OnActivate() = 0;
     virtual void RemoveRelevance() { mgr_ = nullptr; }
     void SetNextActiveTime(uint64 next_active_time = 0);
+    void FixFirstActiveTime();
 
     void Invalidate() {
         loop_count_ = 1;

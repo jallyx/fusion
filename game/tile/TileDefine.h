@@ -2,16 +2,13 @@
 
 #include <stddef.h>
 
-#define MAP_TILE_SIZE (5.0f)
+#define MAP_TILE_SIZE (3.001f)
 
 class TileDefine
 {
 public:
     TileDefine(float x_min, float x_max, float z_min, float z_max)
-        : x_min_(x_min)
-        , x_max_(x_max)
-        , z_min_(z_min)
-        , z_max_(z_max)
+        : x_min_(x_min), x_max_(x_max), z_min_(z_min), z_max_(z_max)
         , x_size_(size_t((x_max - x_min) / MAP_TILE_SIZE) + 1)
         , z_size_(size_t((z_max - z_min) / MAP_TILE_SIZE) + 1)
     {}

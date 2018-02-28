@@ -1,5 +1,4 @@
 #include "AINodeBase.h"
-#include "AIBlackboard.h"
 
 AINodeBase::AINodeBase(AIBlackboard &blackboard)
 : blackboard_(blackboard)
@@ -17,20 +16,23 @@ int AINodeBase::SetExternalPrecondition(lua_State *L)
     return 0;
 }
 
-bool AINodeBase::Evaluate()
+AINodeBase::PathValue AINodeBase::Evaluate()
 {
-    if (ExternalEvaluate() && InternalEvaluate())
-        return true;
+    if (ExternalEvaluate()) {
+        if (InternalEvaluate())
+            return Runnable;
+        return Reachable;
+    }
     if (status_ == Running)
         Interrupt();
-    return false;
+    return Unreachable;
 }
 
 bool AINodeBase::ExternalEvaluate() const
 {
     if (!external_precondition_.isref())
         return true;
-    if (external_precondition_.Call<bool, const LuaRef &>(blackboard_.game_object_meta()))
+    if (external_precondition_.Call<bool>())
         return true;
     return false;
 }

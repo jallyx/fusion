@@ -4,12 +4,12 @@
 #include <functional>
 #include "enable_linked_from_this.h"
 
-class WheelTimerOwner : virtual private WheelRoutineOwner,
+class WheelTimerOwner : virtual protected WheelRoutineOwner,
     public enable_linked_from_this<WheelTimerOwner>
 {
 public:
     WheelTimerOwner();
-    virtual ~WheelTimerOwner();
+    ~WheelTimerOwner();
 
     void CreateTimer(const std::function<void()> &cb, uint32 type,
         uint64 interval, uint32 repeats = 0, uint64 firstime = 0);
@@ -24,5 +24,5 @@ public:
 
 private:
     class Timer;
-    std::list<Timer*> timer_list_;
+    std::multimap<uint32, Timer*> timers_;
 };

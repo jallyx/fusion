@@ -1,11 +1,5 @@
 #pragma once
 
-enum MULTILANG {
-    LANG_CN,
-    LANG_EN,
-    LANG_MAX
-};
-
 enum {
     OPCODE_LARGE_PACKET = 0xffff,
 };

@@ -116,6 +116,10 @@ public:
         rpos_ = rpos; return v;
     }
 
+    template <typename T> size_t Placeholder(T v) {
+        size_t wpos = wpos_; operator<<(v); return wpos;
+    }
+
     template <typename T> void Put(size_t pos, T v) {
         assert(pos <= wpos_ && "put position fatal error.");
         size_t wpos = wpos_; wpos_ = pos; operator<<(v);

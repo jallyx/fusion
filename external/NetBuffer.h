@@ -3,10 +3,10 @@
 #include "NetStream.h"
 #include <atomic>
 
-class StaticNetBuffer : public INetStream
+class ConstNetBuffer : public INetStream
 {
 public:
-    StaticNetBuffer(const void *data, size_t size) {
+    ConstNetBuffer(const void *data, size_t size) {
         InitInternalBuffer((char*)data, size);
         Erlarge(size);
     }

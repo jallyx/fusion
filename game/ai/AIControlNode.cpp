@@ -51,9 +51,15 @@ void AIPrioritySelector::OnFinish()
 bool AIPrioritySelector::InternalEvaluate()
 {
     for (size_t index = 0, total = children_node_.size(); index < total; ++index) {
-        if (children_node_[index]->Evaluate()) {
+        switch (children_node_[index]->Evaluate()) {
+        case Runnable:
             SelectChildNode(index);
             return true;
+        case Reachable:
+            SelectChildNode(index);
+            return false;
+        default:
+            break;
         }
     }
     return false;
@@ -61,12 +67,10 @@ bool AIPrioritySelector::InternalEvaluate()
 
 void AIPrioritySelector::SelectChildNode(ssize_t evaluate_selected_index)
 {
-    if (current_selected_index_ != evaluate_selected_index) {
-        if (current_selected_index_ != -1) {
-            children_node_[current_selected_index_]->Interrupt();
-        }
-        current_selected_index_ = evaluate_selected_index;
+    if (current_selected_index_ > evaluate_selected_index) {
+        children_node_[current_selected_index_]->Interrupt();
     }
+    current_selected_index_ = evaluate_selected_index;
 }
 
 AISequenceSelector::AISequenceSelector(AIBlackboard &blackboard)
@@ -105,9 +109,15 @@ bool AISequenceSelector::InternalEvaluate()
     };
     for (int i = 0; i < 2; ++i) {
         for (size_t index = limits[i][0], end = limits[i][1]; index < end; ++index) {
-            if (children_node_[index]->Evaluate()) {
+            switch (children_node_[index]->Evaluate()) {
+            case Runnable:
                 current_selected_index_ = index;
                 return true;
+            case Reachable:
+                current_selected_index_ = index;
+                return false;
+            default:
+                break;
             }
         }
     }
@@ -151,8 +161,11 @@ void AIWeightedSelector::OnFinish()
 bool AIWeightedSelector::InternalEvaluate()
 {
     if (current_selected_index_ != -1) {
-        if (children_node_[current_selected_index_]->Evaluate())
-            return true;
+        switch (children_node_[current_selected_index_]->Evaluate()) {
+        case Runnable: return true;
+        case Reachable: return false;
+        default: break;
+        }
     }
 
     std::vector<int> children_weight = children_weight_;
@@ -166,9 +179,15 @@ bool AIWeightedSelector::InternalEvaluate()
         for (size_t index = 0; index < n; ++index) {
             int &child_weight = children_weight[index];
             if ((odds_weight -= child_weight) < 0) {
-                if (children_node_[index]->Evaluate()) {
+                switch (children_node_[index]->Evaluate()) {
+                case Runnable:
                     current_selected_index_ = index;
                     return true;
+                case Reachable:
+                    current_selected_index_ = index;
+                    return false;
+                default:
+                    break;
                 }
                 total_weight -= child_weight;
                 child_weight = 0;
@@ -227,7 +246,10 @@ void AISequenceNode::OnFinish()
 
 bool AISequenceNode::InternalEvaluate()
 {
-    return children_node_[current_selected_index_]->Evaluate();
+    switch (children_node_[current_selected_index_]->Evaluate()) {
+    case Runnable: return true;
+    default: return false;
+    }
 }
 
 AIParallelNode::AIParallelNode(AIBlackboard &blackboard)
@@ -288,12 +310,19 @@ void AIParallelNode::OnFinish()
 
 bool AIParallelNode::InternalEvaluate()
 {
+    size_t reachable_counter = 0;
     current_selected_index_.clear();
     current_selected_index_.reserve(children_node_.size());
     for (size_t index = 0, total = children_node_.size(); index < total; ++index) {
-        if (children_node_[index]->Evaluate()) {
+        switch (children_node_[index]->Evaluate()) {
+        case Runnable:
             current_selected_index_.push_back(index);
+        case Reachable:
+            reachable_counter += 1;
+            break;
+        default:
+            break;
         }
     }
-    return current_selected_index_.size() >= std::min(x_as_passed_, children_node_.size());
+    return reachable_counter >= std::min(x_as_passed_, children_node_.size());
 }

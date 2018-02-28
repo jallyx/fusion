@@ -8,6 +8,7 @@ static const size_t capacity[] = {256,64,64,64,64};
 WheelTimerMgr::WheelTimerMgr(uint64 particle, uint64 curtime)
 : tick_particle_(particle)
 , tick_count_(curtime/particle)
+, anchor_container_{nullptr}
 {
     pointer_slot_.resize(ARRAY_SIZE(capacity));
     all_timer_.resize(ARRAY_SIZE(capacity));
@@ -47,6 +48,21 @@ void WheelTimerMgr::Update(uint64 curtime)
         CascadeAndTick();
         Relocate(Activate());
     }
+
+    if (thread_id_ == std::thread::id()) {
+        thread_id_ = std::this_thread::get_id();
+    }
+}
+
+void WheelTimerMgr::RePush(WheelTimer *timer, uint64 next_active_time)
+{
+    if (thread_id_ == std::this_thread::get_id()) {
+        std::list<WheelTimer*> timer_list;
+        timer_list.splice(timer_list.end(),
+            all_timer_[timer->n1_][timer->n2_], timer->itr_);
+        timer->SetNextActiveTime(next_active_time);
+        Relocate(std::move(timer_list));
+    }
 }
 
 void WheelTimerMgr::Push(WheelTimer *timer, uint64 first_active_time)
@@ -58,6 +74,10 @@ void WheelTimerMgr::Push(WheelTimer *timer, uint64 first_active_time)
         std::lock_guard<std::mutex> lock(push_mutex_);
         push_pool_.push_back(timer);
     } while (0);
+
+    if (thread_id_ == std::this_thread::get_id()) {
+        DynamicMerge();
+    }
 }
 
 void WheelTimerMgr::Pop(WheelTimer *timer)
@@ -66,6 +86,10 @@ void WheelTimerMgr::Pop(WheelTimer *timer)
         std::lock_guard<std::mutex> lock(pop_mutex_);
         pop_pool_.push_back(timer);
     } while (0);
+
+    if (thread_id_ == std::this_thread::get_id()) {
+        DynamicRemove();
+    }
 }
 
 void WheelTimerMgr::DynamicMerge()
@@ -79,6 +103,7 @@ void WheelTimerMgr::DynamicMerge()
     for (auto iterator = timer_list.begin(); iterator != timer_list.end();) {
         WheelTimer *timer = *iterator;
         if (timer->OnPrepare()) {
+            timer->FixFirstActiveTime();
             ++iterator;
         } else {
             iterator = timer_list.erase(iterator);
@@ -130,22 +155,30 @@ void WheelTimerMgr::CascadeAndTick()
 std::list<WheelTimer*> WheelTimerMgr::Activate()
 {
     std::list<WheelTimer*> &active_timer_list = all_timer_[0][pointer_slot_[0]];
-    std::list<WheelTimer*>::iterator iterator = active_timer_list.begin();
-    while (iterator != active_timer_list.end()) {
-        WheelTimer *timer = *iterator;
-        timer->SetNextActiveTime();
-        timer->OnActivate();
-        ++iterator;
-        switch (timer->loop_count_) {
-        case 0:
-            break;
-        case 1:
-            delete timer;
-            break;
-        default:
-            --timer->loop_count_;
-            break;
-        }
+    if (!active_timer_list.empty()) {
+        std::list<WheelTimer*>::iterator iterator = active_timer_list.begin();
+        std::list<WheelTimer*>::iterator anchor = anchor_container_.begin();
+        active_timer_list.splice(iterator, anchor_container_, anchor);
+        do {
+            WheelTimer *timer = *iterator;
+            timer->SetNextActiveTime();
+            timer->OnActivate();
+            iterator = std::next(anchor);
+            if (iterator != active_timer_list.end() && *iterator == timer) {
+                active_timer_list.splice(++iterator, active_timer_list, anchor);
+                switch (timer->loop_count_) {
+                case 0:
+                    break;
+                case 1:
+                    delete timer;
+                    break;
+                default:
+                    --timer->loop_count_;
+                    break;
+                }
+            }
+        } while (iterator != active_timer_list.end());
+        anchor_container_.splice(anchor_container_.end(), active_timer_list, anchor);
     }
     return std::move(active_timer_list);
 }
@@ -156,7 +189,7 @@ void WheelTimerMgr::Relocate(std::list<WheelTimer*> &&pending_timer_list)
         WheelTimer *timer = pending_timer_list.front();
         timer->mgr_ = nullptr;
         uint64 evaluate_value = timer->active_tick_count_ - tick_count_;
-        for (size_t index = 0; index <= ARRAY_SIZE(capacity); ++index) {
+        for (size_t index = 0; index < ARRAY_SIZE(capacity); ++index) {
             if (evaluate_value >= capacity[index]) {
                 uint64 linear = evaluate_value - capacity[index] + pointer_slot_[index] + 1;
                 evaluate_value = linear / capacity[index];

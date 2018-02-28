@@ -27,6 +27,13 @@ std::string ReadTEXT(const char *&ptr)
     return text;
 }
 
+char ReadCHAR(const char *&ptr)
+{
+    const char ch = *ptr;
+    ptr += ptr[0] != '\0' ? (ptr[1] != '\0' ? 2 : 1) : 0;
+    return ch;
+}
+
 bool ReadBOOL(const char *&ptr)
 {
     char *endptr = nullptr;

@@ -1,5 +1,6 @@
 #include "HttpPost.h"
 #include <string.h>
+#include "System.h"
 
 #define USER_AGENT "9FANG MMORPG"
 #define POST_CACHE_MIN 1024
@@ -211,7 +212,7 @@ void HttpPost::ReadyBuildHeaderNormal()
     form_boundary_[sizeof(form_boundary_) - 1] = '\0';
     for (size_t index = 0; index < sizeof(form_boundary_) - 1; ++index) {
         form_boundary_[index] =
-            FormBoundaryRefer[rand() % (sizeof(FormBoundaryRefer) - 1)];
+            FormBoundaryRefer[System::Rand(0, sizeof(FormBoundaryRefer) - 1)];
     }
 
     for (auto &form_part : form_data_) {

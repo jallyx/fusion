@@ -3,6 +3,8 @@
 #include "Exception.h"
 
 AsyncTaskOwner::AsyncTaskOwner()
+: event_observer_(nullptr)
+, is_overstocked_task_(false)
 {
 }
 
@@ -12,9 +14,12 @@ AsyncTaskOwner::~AsyncTaskOwner()
     while (tasks_.Dequeue(task)) {
         delete task;
     }
+    if (event_observer_ != nullptr) {
+        event_observer_->OnDeleteOwner(this);
+    }
 }
 
-void AsyncTaskOwner::Update()
+void AsyncTaskOwner::UpdateTask()
 {
     AsyncTask *task = nullptr;
     while (tasks_.Dequeue(task)) {
@@ -34,6 +39,10 @@ void AsyncTaskOwner::Update()
 void AsyncTaskOwner::AddTask(AsyncTask *task)
 {
     tasks_.Enqueue(task);
+    if (!is_overstocked_task_ && event_observer_ != nullptr) {
+        is_overstocked_task_ = true;
+        event_observer_->OnAddTask(this);
+    }
 }
 
 void AsyncTaskOwner::AddSubject(const void *subject)
@@ -44,4 +53,14 @@ void AsyncTaskOwner::AddSubject(const void *subject)
 bool AsyncTaskOwner::HasSubject() const
 {
     return !subjects_.IsEmpty();
+}
+
+void AsyncTaskOwner::SetEventObserver(IEventObserver *observer)
+{
+    event_observer_ = observer;
+}
+
+void AsyncTaskOwner::ClearTaskOverstockFlag()
+{
+    is_overstocked_task_ = false;
 }

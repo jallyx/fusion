@@ -33,7 +33,7 @@ public:
     void DetachOwner()
     {
         if (!owner_.expired()) {
-            owner_.lock()->trigger_list_.erase(itr_);
+            owner_.lock()->triggers_.erase(itr_);
             owner_.reset();
         }
     }
@@ -44,8 +44,7 @@ protected:
     virtual bool OnPrepare()
     {
         if (owner_.expired()) return false;
-        std::list<Trigger*> &tlist = owner_.lock()->trigger_list_;
-        itr_ = tlist.insert(tlist.end(), this);
+        itr_ = owner_.lock()->triggers_.emplace(type_, this);
         WheelTrigger::OnPrepare();
         return true;
     }
@@ -65,7 +64,7 @@ private:
     const std::function<void()> cb_;
     const uint32 type_;
 
-    std::list<Trigger*>::iterator itr_;
+    std::multimap<uint32, Trigger*>::iterator itr_;
     std::weak_ptr<WheelTriggerOwner> owner_;
 };
 
@@ -112,18 +111,18 @@ void WheelTriggerOwner::CreateTriggerX(
 }
 
 void WheelTriggerOwner::RemoveTriggers(uint32 type) {
-    RemoveRoutines(trigger_list_, type);
+    RemoveRoutines(triggers_, type);
 }
 void WheelTriggerOwner::RemoveTriggers() {
-    RemoveRoutines(trigger_list_);
+    RemoveRoutines(triggers_);
 }
 bool WheelTriggerOwner::HasTrigger(uint32 type) const {
-    return HasRoutine(trigger_list_, type);
+    return HasRoutine(triggers_, type);
 }
 bool WheelTriggerOwner::HasTrigger() const {
-    return HasRoutine(trigger_list_);
+    return HasRoutine(triggers_);
 }
 template <>
 WheelTrigger *WheelTriggerOwner::FindTrigger(uint32 type) const {
-    return FindRoutine(trigger_list_, type);
+    return FindRoutine(triggers_, type);
 }
