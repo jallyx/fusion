@@ -42,11 +42,9 @@ bool AsyncTaskMgr::WaitTask(const void *queue)
     std::cv_status status;
     const std::chrono::milliseconds duration(100);
     if (&tasks_ == queue) {
-        std::unique_lock<std::mutex> lock(mutex_);
-        status = cv_.wait_for(lock, duration);
+        status = cv_.wait_for(fakelock_, duration);
     } else if (&heavy_tasks_ == queue) {
-        std::unique_lock<std::mutex> lock(heavy_mutex_);
-        status = heavy_cv_.wait_for(lock, duration);
+        status = heavy_cv_.wait_for(heavy_fakelock_, duration);
     } else {
         assert(false && "can't reached here.");
     }

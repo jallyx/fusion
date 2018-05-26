@@ -11,7 +11,8 @@ class Session;
 class Connection : public std::enable_shared_from_this<Connection>
 {
 public:
-    Connection(ConnectionManager &manager, Session &session);
+    Connection(boost::asio::io_service &io_service,
+        ConnectionManager &manager, Session &session, int load_value);
     ~Connection();
 
     void Init();
@@ -20,7 +21,7 @@ public:
     void PostWriteRequest();
     void PostCloseRequest();
 
-    void SetSocket(const asio::ip::tcp::socket::protocol_type &protocol, SOCKET socket);
+    void SetSocket(const boost::asio::ip::tcp::socket::protocol_type &protocol, SOCKET socket);
     void AsyncConnect(const std::string &address, const std::string &port);
 
     bool HasSendDataAwaiting() const;
@@ -31,6 +32,9 @@ public:
 
     const std::string &addr() const { return addr_; }
     unsigned short port() const { return port_; }
+
+    int get_load_value() const { return load_value_; }
+    boost::asio::io_service &get_io_service() { return sock_.get_io_service(); }
 
     SendBuffer &GetSendBuffer() { return send_buffer_; }
 
@@ -43,10 +47,10 @@ private:
     void StartNextRead();
     void StartNextWrite();
 
-    void OnResolveComplete(const asio::error_code &ec, asio::ip::tcp::resolver::iterator itr);
-    void OnConnectComplete(const asio::error_code &ec);
-    void OnReadComplete(const asio::error_code &ec, const char *buffer, std::size_t bytes);
-    void OnWriteComplete(const asio::error_code &ec, const char *buffer, std::size_t bytes);
+    void OnResolveComplete(const boost::system::error_code &ec, boost::asio::ip::tcp::resolver::iterator itr);
+    void OnConnectComplete(const boost::system::error_code &ec);
+    void OnReadComplete(const boost::system::error_code &ec, const char *buffer, std::size_t bytes);
+    void OnWriteComplete(const boost::system::error_code &ec, const char *buffer, std::size_t bytes);
 
     char *GetRecvDataBuffer(size_t &size);
     const char *GetSendDataBuffer(size_t &size);
@@ -62,13 +66,14 @@ private:
     CircularBuffer &GetFinalRecvBuffer();
     INetPacket *ReadPacketFromBuffer();
 
+    const int load_value_;
+
     ConnectionManager &manager_;
     Session &session_;
     bool is_active_;
 
-    asio::io_service::strand strand_;
-    asio::ip::tcp::resolver resolver_;
-    asio::ip::tcp::socket sock_;
+    boost::asio::ip::tcp::resolver resolver_;
+    boost::asio::ip::tcp::socket sock_;
     std::string addr_;
     unsigned short port_;
     bool is_connected_;

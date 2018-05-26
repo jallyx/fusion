@@ -1,11 +1,11 @@
 #include "Receiver.h"
 #include "ConnectlessManager.h"
+#include "network/IOServiceManager.h"
+#include "Logger.h"
 #include "OS.h"
 
 Receiver::Receiver()
 : sockfd_(INVALID_SOCKET)
-, connectless_manager_(nullptr)
-, io_service_(nullptr)
 {
 }
 
@@ -15,8 +15,6 @@ Receiver::~Receiver()
 
 bool Receiver::Prepare()
 {
-    connectless_manager_ = GetConnectlessManager();
-    io_service_ = GetAsioServeice();
     addr_ = GetBindAddress();
     port_ = GetBindPort();
     return true;
@@ -59,9 +57,10 @@ bool Receiver::Initialize()
         return false;
     }
 
-    const asio::ip::udp::socket::protocol_type protocol =
-        res->ai_family == AF_INET ? asio::ip::udp::v4() : asio::ip::udp::v6();
-    socket_ = std::make_shared<asio::ip::udp::socket>(*io_service_, protocol, sockfd_);
+    auto protocol = res->ai_family == AF_INET ?
+        boost::asio::ip::udp::v4() : boost::asio::ip::udp::v6();
+    socket_ = std::make_shared<boost::asio::ip::udp::socket>(
+        sIOServiceManager.SelectWorkerLoadLowest(), protocol, sockfd_);
 
     return true;
 }
@@ -116,7 +115,7 @@ void Receiver::OnRecvPkt(const struct sockaddr_storage &addr, const char *data, 
     const uint8 type = buffer.Read<u8>();
 
     std::string key = CalcKey(addr);
-    std::shared_ptr<Connectless> conn = connectless_manager_->FindConnectless(key);
+    std::shared_ptr<Connectless> conn = sConnectlessManager.FindConnectless(key);
     if (conn) {
         if (conn->IsActive()) {
             conn->OnRecvPkt(type, buffer);
@@ -128,7 +127,7 @@ void Receiver::OnRecvPkt(const struct sockaddr_storage &addr, const char *data, 
         auto sessionless = NewSessionlessObject(buffer);
         if (sessionless != nullptr) {
             std::shared_ptr<Connectless> conn =
-                connectless_manager_->NewConnectless(key, *io_service_, *sessionless);
+                sConnectlessManager.NewConnectless(key, *sessionless);
             conn->SetSocket(key, socket_, Address(addr));
         }
     }
@@ -149,16 +148,16 @@ std::string Receiver::CalcKey(const struct sockaddr_storage &addr)
     return key;
 }
 
-asio::ip::udp::socket::endpoint_type Receiver::Address(const struct sockaddr_storage &addr)
+boost::asio::ip::udp::socket::endpoint_type Receiver::Address(const struct sockaddr_storage &addr)
 {
-    asio::ip::udp::socket::endpoint_type address;
+    boost::asio::ip::udp::socket::endpoint_type address;
     if (addr.ss_family == AF_INET) {
         struct sockaddr_in &sin = (struct sockaddr_in &)addr;
-        address.address(asio::ip::address_v4(ntohl(sin.sin_addr.s_addr)));
+        address.address(boost::asio::ip::address_v4(ntohl(sin.sin_addr.s_addr)));
         address.port(ntohs(sin.sin_port));
     } else {
         struct sockaddr_in6 &sin6 = (struct sockaddr_in6 &)addr;
-        address.address(asio::ip::address_v6((asio::ip::address_v6::bytes_type&)
+        address.address(boost::asio::ip::address_v6((boost::asio::ip::address_v6::bytes_type&)
             sin6.sin6_addr.s6_addr, sin6.sin6_scope_id));
         address.port(ntohs(sin6.sin6_port));
     }

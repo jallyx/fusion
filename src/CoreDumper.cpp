@@ -12,6 +12,8 @@
 
 CoreDumper::CoreDumper()
 : enable_manual_(true)
+, dump_upper_(0)
+, dump_count_(0)
 {
 #if defined(__linux__)
     struct rlimit limit;
@@ -35,11 +37,16 @@ CoreDumper::~CoreDumper()
 
 void CoreDumper::ManualDump()
 {
-    static unsigned total = 0;
-    if (enable_manual_) {
-        char cmdline[256];
-        snprintf(cmdline, sizeof(cmdline), "gcore -o core.%x.%x %d",
-                 (unsigned)time(nullptr), ++total, getpid());
-        system(cmdline);
+    if (!enable_manual_) {
+        return;
     }
+
+    if (dump_upper_ != 0 && dump_upper_ <= dump_count_) {
+        return;
+    }
+
+    char cmdline[256];
+    snprintf(cmdline, sizeof(cmdline), "gcore -o core.%x.%x %d",
+             (unsigned)time(nullptr), ++dump_count_, getpid());
+    system(cmdline);
 }

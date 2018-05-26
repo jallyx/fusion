@@ -100,7 +100,7 @@ INetPacket &INetPacket::UnpackPacket()
     ReadHeader(header);
 
     SetOpcode(header.cmd);
-    if (header.len - Header::SIZE > GetReadableSize()) {
+    if (header.len != ((GetReadableSize() + Header::SIZE) & 0xffff)) {
         THROW_EXCEPTION(NetStreamException());
     }
 

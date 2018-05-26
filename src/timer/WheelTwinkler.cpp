@@ -30,11 +30,11 @@ WheelTwinkler::~WheelTwinkler()
 
 bool WheelTwinkler::OnPrepare()
 {
-    const time_t current_tick_time = GetCurrentTickTime();
+    const time_t actual_tick_time = GetActualTickTime();
     if (is_strict_) {
         while (true) {
-            is_start_ = current_tick_time > point_time();
-            bool is_stop = current_tick_time > point_time() + trigger_duration_;
+            is_start_ = actual_tick_time > point_time();
+            bool is_stop = actual_tick_time > point_time() + trigger_duration_;
             if ((is_start_ && is_stop) || (is_start_ && !is_stop && !is_isolate_)) {
                 go_next_point_time();
                 continue;
@@ -46,9 +46,9 @@ bool WheelTwinkler::OnPrepare()
         }
     } else {
         if (point_time() == 0) {
-            set_point_time(current_tick_time + active_interval());
-        } else if (current_tick_time > point_time()) {
-            set_point_time(current_tick_time);
+            set_point_time(actual_tick_time + active_interval());
+        } else if (actual_tick_time > point_time()) {
+            set_point_time(actual_tick_time);
         }
     }
     SetNextActiveTime(GetNextActivateTime());
@@ -59,16 +59,15 @@ void WheelTwinkler::OnActivate()
 {
     bool do_start = false, do_stop = false;
     const time_t current_tick_time = GetCurrentTickTime();
-    const time_t current_point_time = point_time();
-    if (!is_start_ && current_tick_time >= current_point_time) {
+    if (!is_start_ && current_tick_time >= point_time()) {
         do_start = is_start_ = true;
     }
-    if (current_tick_time >= current_point_time + trigger_duration_) {
+    if (current_tick_time >= point_time() + trigger_duration_) {
         do_stop = true;
     }
     if (do_stop) {
         is_start_ = false;
-        go_next_point_time();
+        GoNextActiveTime();
     }
     if (do_start && !do_stop) {
         IgnoreOnceLoop();

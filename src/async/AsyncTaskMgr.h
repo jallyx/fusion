@@ -6,6 +6,7 @@
 #include "AsyncTaskOwner.h"
 #include "ThreadSafeQueue.h"
 #include <condition_variable>
+#include "Concurrency.h"
 
 class AsyncTaskMgr : public ThreadPool, public Singleton<AsyncTaskMgr>
 {
@@ -29,8 +30,8 @@ private:
     static std::weak_ptr<AsyncTaskOwner> null_owner_;
     size_t worker_count_;
 
-    std::mutex mutex_, heavy_mutex_;
-    std::condition_variable cv_, heavy_cv_;
+    fakelock fakelock_, heavy_fakelock_;
+    std::condition_variable_any cv_, heavy_cv_;
     ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> tasks_;
     ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> heavy_tasks_;
 };

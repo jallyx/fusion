@@ -30,8 +30,9 @@ time_t CalcPreviousTriggerPointTimeByMonthly(TriggerPoint tp)
                 for (; month >= 0 && !found; --month) {
                     int days = GetDayOfMonth(year + 1900, month + 1);
                     delay_time -= days * 60*60*24;
-                    if (days >= tp.wday)
+                    if (days >= tp.wday) {
                         found = true;
+                    }
                 }
             }
         }
@@ -57,8 +58,9 @@ time_t CalcNextTriggerPointTimeByMonthly(TriggerPoint tp)
             for (int year = tm.tm_year; !found; ++year, month = 0) {
                 for (; month < 12 && !found; ++month) {
                     delay_time += days * 60*60*24;
-                    if ((days = GetDayOfMonth(year + 1900, month + 1)) >= tp.wday)
+                    if ((days = GetDayOfMonth(year + 1900, month + 1)) >= tp.wday) {
                         found = true;
+                    }
                 }
             }
         }
@@ -115,8 +117,9 @@ time_t CalcPreviousTriggerPointTime(TriggerCycle tc, TriggerPoint tp)
     const time_t current_time = GET_UNIX_TIME;
     time_t trigger_interval = GetTriggerInterval(tc);
     time_t trigger_point_time = GetTriggerPointTime(tc, tp);
-    if (trigger_point_time > current_time)
+    if (trigger_point_time > current_time) {
         trigger_point_time -= trigger_interval;
+    }
     return trigger_point_time;
 }
 
@@ -125,7 +128,8 @@ time_t CalcNextTriggerPointTime(TriggerCycle tc, TriggerPoint tp)
     const time_t current_time = GET_UNIX_TIME;
     time_t trigger_interval = GetTriggerInterval(tc);
     time_t trigger_point_time = GetTriggerPointTime(tc, tp);
-    if (trigger_point_time <= current_time)
+    if (trigger_point_time <= current_time) {
         trigger_point_time += trigger_interval;
+    }
     return trigger_point_time;
 }

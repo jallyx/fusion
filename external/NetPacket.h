@@ -56,6 +56,17 @@ private:
     uint32 opcode_;
 };
 
+class ConstNetPacket : public INetPacket
+{
+public:
+    ConstNetPacket(const void *data, size_t size, uint32 opcode = 0)
+        : INetPacket(opcode)
+    {
+        InitInternalBuffer((char*)data, size);
+        Erlarge(size);
+    }
+};
+
 template <size_t N>
 class TNetPacket : public INetPacket
 {

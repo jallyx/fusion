@@ -14,6 +14,7 @@ public:
     static int Rand(int lower, int upper);
     static float Randf(float lower, float upper);
 
+    static time_t GetMinuteUnixTime();
     static time_t GetDayUnixTime();
     static time_t GetWeekUnixTime();
     static time_t GetMonthUnixTime();
@@ -40,6 +41,7 @@ private:
 #define GET_SYS_TIME (System::GetSysTime())
 #define GET_DATE_TIME (System::GetDateTime())
 
+#define GET_MINUTE_UNIX_TIME (System::GetMinuteUnixTime())
 #define GET_DAY_UNIX_TIME (System::GetDayUnixTime())
 #define GET_WEEK_UNIX_TIME (System::GetWeekUnixTime())
 #define GET_MONTH_UNIX_TIME (System::GetMonthUnixTime())

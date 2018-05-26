@@ -14,18 +14,17 @@ class Sessionless;
 class Connectless : public std::enable_shared_from_this<Connectless>
 {
 public:
-    Connectless(asio::io_service &io_service,
-        ConnectlessManager &manager, Sessionless &sessionless);
+    Connectless(boost::asio::io_service &io_service,
+        ConnectlessManager &manager, Sessionless &sessionless, int load_value);
     ~Connectless();
 
     void Init();
 
     void PostCloseRequest();
-    void PostPktRtoRequest(uint32 rto);
 
     void SetSocket(const std::string &key,
-        const std::shared_ptr<asio::ip::udp::socket> &socket,
-        const asio::ip::udp::socket::endpoint_type &destination);
+        const std::shared_ptr<boost::asio::ip::udp::socket> &socket,
+        const boost::asio::ip::udp::socket::endpoint_type &destination);
     void AsyncConnect(const std::string &key,
         const std::string &address, const std::string &port);
 
@@ -43,9 +42,11 @@ public:
 
     const std::string &key() const { return key_; }
 
-    uint32 rto() const {
-        return u32(std::min(std::max(rtt_ * 1.3f, 30.f), 1000.f));
-    }
+    int get_load_value() const { return load_value_; }
+    boost::asio::io_service &get_io_service() { return resolver_.get_io_service(); }
+
+    static void InitQueueBufferPool();
+    static void ClearQueueBufferPool();
 
 private:
     void Close();
@@ -53,28 +54,40 @@ private:
     void PostRecvRequest();
     void PostReadRequest();
     void PostWriteRequest();
+    void PostPacketSendRequest();
 
     void StartNextRecv();
     void StartDataRead();
     void StartDataWrite();
-    void StartRtoWrite(uint32 rto);
-    void StartLostWrite(const SendQueue::PktPtr &stop);
+    void StartPacketSend();
 
     void SendAck(uint8 age, uint64 seq, uint64 una);
     void OnPktAck(uint8 age, uint64 seq, uint64 una);
 
-    void OnResolveComplete(const asio::error_code &ec, asio::ip::udp::resolver::iterator itr);
-    void OnConnectComplete(const asio::error_code &ec);
-    void OnRecvComplete(const asio::error_code &ec, std::size_t bytes);
+    void OnResolveComplete(const boost::system::error_code &ec, boost::asio::ip::udp::resolver::iterator itr);
+    void OnConnectComplete(const boost::system::error_code &ec);
+    void OnRecvComplete(const boost::system::error_code &ec, std::size_t bytes);
+
+    void PostPktRtoWriteRequest(uint32 expiry);
+    void PostPktLostWriteRequest(uint32 expiry);
+
+    void OnPktRtoWrite(const boost::system::error_code &ec, uint32 expiry);
+    void OnPktLostWrite(const boost::system::error_code &ec, uint32 expires);
+
+    void CleanPktLostInfos();
 
     void PreprocessRecvData();
     void PreprocessSendData();
 
+    void RefreshRTO(uint32 rtt);
+    void UpsideRTO();
+    uint32 rto() const;
+
     class MultiBuffers {
     public:
         MultiBuffers() : n_(0) {}
-        typedef asio::const_buffer value_type;
-        typedef const asio::const_buffer *const_iterator;
+        typedef boost::asio::const_buffer value_type;
+        typedef const boost::asio::const_buffer *const_iterator;
         const_iterator begin() const { return buffs_; }
         const_iterator end() const { return buffs_ + n_; }
         void add(const SendQueue::PktValue &buffers) {
@@ -87,7 +100,7 @@ private:
             assert(n_ <= ARRAY_SIZE(buffs_));
         }
     private:
-        asio::const_buffer buffs_[3];
+        boost::asio::const_buffer buffs_[3];
         size_t n_;
     };
     void SendPkt(const MultiBuffers &buffers);
@@ -105,17 +118,19 @@ private:
         }
     };
     PacketInfo ReadPacketReliableFromBuffer();
+    bool ReadPacketUnreliableFromBuffer();
     void DispatchPacketUnreliable(const PacketInfo &info);
     void DispatchPacket(INetPacket *pck);
+
+    const int load_value_;
 
     ConnectlessManager &manager_;
     Sessionless &sessionless_;
     bool is_active_;
 
-    asio::io_service::strand strand_;
-    asio::ip::udp::resolver resolver_;
-    std::shared_ptr<asio::ip::udp::socket> sock_;
-    asio::ip::udp::socket::endpoint_type dest_;
+    boost::asio::ip::udp::resolver resolver_;
+    std::shared_ptr<boost::asio::ip::udp::socket> sock_;
+    boost::asio::ip::udp::socket::endpoint_type dest_;
     std::string key_, addr_;
     unsigned short port_;
     bool is_connected_;
@@ -130,11 +145,21 @@ private:
     char async_recv_buffer[UDP_PKT_MAX+100];
     bool is_residual_send_data_;
 
-    uint32 rtt_;
+    SendBuffer packet_buffer_;
+    TNetPacket<UDP_PKT_MAX+100> packet_cache_;
+
+    float srtt_;
+    float rttvar_;
+
     uint32 recv_sn_[2];
     std::atomic<uint32> send_sn_[2];
     std::priority_queue<PacketInfo> packets_;
 
-    std::atomic_flag is_recving_, is_reading_, is_writing_;
+    boost::asio::deadline_timer rto_timer_;
+    boost::asio::deadline_timer lost_timer_;
+    std::deque<std::pair<uint32, uint32>> lost_infos_;
+
+    std::atomic_flag is_recving_, is_sending_;
+    std::atomic_flag is_reading_, is_writing_;
     uint64 last_recv_data_time_, last_send_data_time_;
 };

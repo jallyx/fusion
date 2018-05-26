@@ -17,8 +17,8 @@ protected:
     virtual bool OnPrepare();
     virtual void OnActivate();
 
-    virtual void OnStartActive() = 0;
-    virtual void OnStopActive() = 0;
+    virtual void OnStartActive() {}
+    virtual void OnStopActive() {}
 
     time_t trigger_duration() const { return trigger_duration_; }
 

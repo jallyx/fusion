@@ -4,9 +4,9 @@
 TileHandler::TileHandler(const TileDefine &tile_define)
 : tile_define_(tile_define)
 , tiles_(nullptr)
-, anchor_(nullptr)
-, group_time_{}
-, tick_count_{}
+, anchor_tile_(nullptr)
+, anchor_actor_(nullptr)
+, tick_count_(0)
 {
 }
 
@@ -20,10 +20,10 @@ TileHandler::~TileHandler()
                         delete tiles_[x][z];
                     }
                 }
-                delete [] tiles_[x];
+                delete[] tiles_[x];
             }
         }
-        delete [] tiles_;
+        delete[] tiles_;
     }
 }
 
@@ -76,13 +76,9 @@ void TileHandler::TryRecycleTile(MapTile *tile)
     }
 }
 
-void TileHandler::UpdateActive(int dt)
+void TileHandler::UpdateActive()
 {
     const size_t i = ++tick_count_ % group_count_;
-    for (size_t i = 0; i < group_count_; ++i) {
-        group_time_[i] += dt;
-    }
-
     TRY_BEGIN {
 
         if (tiles_ != nullptr) {
@@ -90,7 +86,7 @@ void TileHandler::UpdateActive(int dt)
                 if (tiles_[x] != nullptr && x % group_count_ == i) {
                     for (size_t z = 0; z < tile_define_.z_size(); ++z) {
                         if (tiles_[x][z] != nullptr) {
-                            tiles_[x][z]->UpdateActive(group_time_[i]);
+                            tiles_[x][z]->UpdateActive();
                         }
                     }
                 }
@@ -103,6 +99,4 @@ void TileHandler::UpdateActive(int dt)
     } CATCH_END
     CATCH_BEGIN(...) {
     } CATCH_END
-
-    group_time_[i] = 0;
 }

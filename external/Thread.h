@@ -42,4 +42,5 @@ private:
 
     Status status_;
     std::thread thread_;
+    bool thread_running_;
 };

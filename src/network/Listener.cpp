@@ -6,8 +6,6 @@
 
 Listener::Listener()
 : sockfd_(INVALID_SOCKET)
-, connection_manager_(nullptr)
-, session_manager_(nullptr)
 {
 }
 
@@ -17,8 +15,6 @@ Listener::~Listener()
 
 bool Listener::Prepare()
 {
-    connection_manager_ = GetConnectionManager();
-    session_manager_ = GetSessionManager();
     addr_ = GetBindAddress();
     port_ = GetBindPort();
     return true;
@@ -111,12 +107,12 @@ void Listener::Finish()
 void Listener::OnAcceptComplete(int family, SOCKET sockfd)
 {
     Session *session = NewSessionObject();
-    std::shared_ptr<Connection> connPtr = connection_manager_->NewConnection(*session);
+    std::shared_ptr<Connection> connPtr = sConnectionManager.NewConnection(*session);
 
-    const asio::ip::tcp::socket::protocol_type protocol =
-        family == AF_INET ? asio::ip::tcp::v4() : asio::ip::tcp::v6();
+    const boost::asio::ip::tcp::socket::protocol_type protocol =
+        family == AF_INET ? boost::asio::ip::tcp::v4() : boost::asio::ip::tcp::v6();
     connPtr->SetSocket(protocol, sockfd);
 
-    session_manager_->AddSession(session);
+    sSessionManager.AddSession(session);
     connPtr->PostReadRequest();
 }

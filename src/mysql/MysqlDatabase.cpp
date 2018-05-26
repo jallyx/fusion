@@ -92,3 +92,8 @@ void MysqlDatabase::DeleteConnection(MysqlConnection *conn)
 {
     delete conn;
 }
+
+std::unique_ptr<MysqlConnection, MysqlDatabase::ConnDeleter> MysqlDatabase::GetConnAutoPtr()
+{
+    return{ GetConnection(), {this} };
+}

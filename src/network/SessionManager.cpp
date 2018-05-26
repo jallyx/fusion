@@ -1,4 +1,5 @@
 #include "SessionManager.h"
+#include "System.h"
 #include "OS.h"
 
 SessionManager::SessionManager()
@@ -7,7 +8,6 @@ SessionManager::SessionManager()
 
 SessionManager::~SessionManager()
 {
-    ClearAll();
 }
 
 void SessionManager::Update()
@@ -23,8 +23,22 @@ void SessionManager::Tick()
 
 void SessionManager::Stop()
 {
-    ShutdownAll();
-    ClearAll();
+    while (true) {
+        ShutdownAll();
+        if (!sessions_.empty() ||
+            !waiting_room_.IsEmpty() ||
+            !recycle_bin_.IsEmpty())
+        {
+            if (external_cleanup_) {
+                external_cleanup_();
+            }
+            Update();
+            OS::SleepMS(1);
+            System::Update();
+        } else {
+            break;
+        }
+    }
 }
 
 void SessionManager::CheckSessions()
@@ -103,27 +117,4 @@ void SessionManager::ShutdownAll()
     for (auto session : sessions_) {
         session->ShutdownSession();
     }
-}
-
-void SessionManager::ClearAll()
-{
-    auto SafeSessionDeleter = [](Session *session) {
-        session->Disconnect();
-        while (!session->IsIndependent())
-            OS::SleepMS(1);
-        session->DeleteObject();
-    };
-
-    Session *session = nullptr;
-    while (waiting_room_.Dequeue(session)) {
-        SafeSessionDeleter(session);
-    }
-    while (recycle_bin_.Dequeue(session)) {
-        SafeSessionDeleter(session);
-        sessions_.erase(session);
-    }
-    for (auto session : sessions_) {
-        SafeSessionDeleter(session);
-    }
-    sessions_.clear();
 }

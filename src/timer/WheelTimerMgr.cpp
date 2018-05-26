@@ -1,5 +1,6 @@
 #include "WheelTimerMgr.h"
 #include "WheelTimer.h"
+#include "Exception.h"
 #include "Logger.h"
 #include "Macro.h"
 
@@ -8,12 +9,14 @@ static const size_t capacity[] = {256,64,64,64,64};
 WheelTimerMgr::WheelTimerMgr(uint64 particle, uint64 curtime)
 : tick_particle_(particle)
 , tick_count_(curtime/particle)
+, actual_tick_count_(curtime/particle)
 , anchor_container_{nullptr}
 {
     pointer_slot_.resize(ARRAY_SIZE(capacity));
     all_timer_.resize(ARRAY_SIZE(capacity));
-    for (size_t i = 0; i < ARRAY_SIZE(capacity); ++i)
+    for (size_t i = 0; i < ARRAY_SIZE(capacity); ++i) {
         all_timer_[i].resize(capacity[i]);
+    }
 }
 
 WheelTimerMgr::~WheelTimerMgr()
@@ -39,16 +42,17 @@ void WheelTimerMgr::Clear()
     for (size_t i = 0; i < ARRAY_SIZE(capacity); ++i) {
         for (size_t j = 0; j < capacity[i]; ++j) {
             std::list<WheelTimer*> &tlist = all_timer_[i][j];
-            while (!tlist.empty())
+            while (!tlist.empty()) {
                 delete tlist.front();
+            }
         }
     }
 }
 
 void WheelTimerMgr::Update(uint64 curtime)
 {
-    const uint64 goto_tick_count = curtime / tick_particle_;
-    while (tick_count_ < goto_tick_count) {
+    actual_tick_count_ = curtime / tick_particle_;
+    while (tick_count_ < actual_tick_count_) {
         DynamicMerge();
         DynamicRemove();
         CascadeAndTick();
@@ -143,17 +147,19 @@ void WheelTimerMgr::CascadeAndTick()
             size_t slot = linear < capacity[index] ? linear : 0;
             pending_timer_list.splice(
                 pending_timer_list.end(), all_timer_[index][slot]);
-            if (slot != 0)
+            if (slot != 0) {
                 break;
+            }
         }
         Relocate(std::move(pending_timer_list));
     }
 
     for (size_t index = 0; index < ARRAY_SIZE(capacity); ++index) {
-        if (++pointer_slot_[index] >= capacity[index])
+        if (++pointer_slot_[index] >= capacity[index]) {
             pointer_slot_[index] = 0;
-        else
+        } else {
             break;
+        }
     }
 
     ++tick_count_;
@@ -169,7 +175,14 @@ std::list<WheelTimer*> WheelTimerMgr::Activate()
         do {
             WheelTimer *timer = *itr;
             timer->SetNextActiveTime();
-            timer->OnActivate();
+            TRY_BEGIN {
+                timer->OnActivate();
+            } TRY_END
+            CATCH_BEGIN(const IException &e) {
+                e.Print();
+            } CATCH_END
+            CATCH_BEGIN(...) {
+            } CATCH_END
             itr = std::next(anchor);
             if (itr != active_timer_list.end() && *itr == timer) {
                 active_timer_list.splice(++itr, active_timer_list, anchor);

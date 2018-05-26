@@ -21,8 +21,6 @@ protected:
     virtual void Kernel();
     virtual void Finish();
 
-    virtual ConnectionManager *GetConnectionManager() = 0;
-    virtual SessionManager *GetSessionManager() = 0;
     virtual std::string GetBindAddress() = 0;
     virtual std::string GetBindPort() = 0;
 
@@ -33,8 +31,6 @@ private:
 
     SOCKET sockfd_;
 
-    ConnectionManager *connection_manager_;
-    SessionManager *session_manager_;
     std::string addr_;
     std::string port_;
 };

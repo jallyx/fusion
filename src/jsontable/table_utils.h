@@ -50,22 +50,10 @@ public:
     streambuf_INetStream(INetStream &stream) : stream_(stream) {}
 private:
     virtual std::streamsize showmanyc() { return stream_.GetReadableSize(); }
-    virtual int_type underflow() {
-        if (!stream_.IsReadableEmpty()) return stream_.Peek<unsigned char>();
-        return std::char_traits<char>::eof();
-    }
-    virtual int_type uflow() {
-        if (!stream_.IsReadableEmpty()) return stream_.Read<unsigned char>();
-        return std::char_traits<char>::eof();
-    }
     virtual std::streamsize xsgetn(char *s, std::streamsize n) {
         std::streamsize size = std::min(n, in_avail());
         stream_.Take(s, (size_t)size);
         return size;
-    }
-    virtual int_type overflow(int_type c) {
-        stream_.Write((unsigned char)c);
-        return (unsigned char)c;
     }
     virtual std::streamsize xsputn(const char *s, std::streamsize n) {
         stream_.Append(s, (size_t)n);

@@ -24,12 +24,11 @@ MapTile::ActorItr MapTile::AddActor(TileActor *actor)
 
 MapTile::ActorItr MapTile::MigrateActor(MapTile *tile, ActorItr itr)
 {
-    bool active = *itr == handler_->anchor();
-    if (active) {
-        handler_->anchor() = (*itr)->NextActor();
+    if (handler_->anchor_actor() == *itr) {
+        handler_->anchor_actor() = (*itr)->NextActor();
     }
     actors_.splice(actors_.begin(), tile->actors_, itr);
-    if (!active && tile->empty()) {
+    if (handler_->anchor_tile() != tile && tile->empty()) {
         handler_->TryRecycleTile(tile);
     }
     return actors_.begin();
@@ -37,23 +36,38 @@ MapTile::ActorItr MapTile::MigrateActor(MapTile *tile, ActorItr itr)
 
 void MapTile::RemoveActor(ActorItr itr)
 {
-    bool active = *itr == handler_->anchor();
-    if (active) {
-        handler_->anchor() = (*itr)->NextActor();
+    if (handler_->anchor_actor() == *itr) {
+        handler_->anchor_actor() = (*itr)->NextActor();
     }
     actors_.erase(itr);
-    if (!active && empty()) {
+    if (handler_->anchor_tile() != this && empty()) {
         handler_->TryRecycleTile(this);
     }
 }
 
-void MapTile::UpdateActive(int dt)
+class MapTile::AutoAnchorTile
+{
+public:
+    AutoAnchorTile(MapTile *tile)
+        : anchor_tile_(tile->handler_->anchor_tile())
+    {
+        anchor_tile_ = tile;
+    }
+    ~AutoAnchorTile() {
+        anchor_tile_ = nullptr;
+    }
+private:
+    MapTile *&anchor_tile_;
+};
+
+void MapTile::UpdateActive()
 {
     if (!actors_.empty()) {
-        TileActor *&anchor = handler_->anchor();
+        AutoAnchorTile autoAnchorTile(this);
+        TileActor *&anchor = handler_->anchor_actor();
         TileActor *actor = anchor = actors_.front();
         do {
-            actor->UpdateActive(dt);
+            actor->UpdateActive();
             actor = actor != anchor ?
                 anchor : (anchor = anchor->NextActor());
         } while (actor != nullptr);

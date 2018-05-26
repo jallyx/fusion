@@ -61,7 +61,7 @@ public:
 
     struct OnSentPktRst {
         uint32 stamp = 0;
-        PktPtr next;
+        bool lost = false;
     };
 
     struct DataWriter {
@@ -178,16 +178,8 @@ public:
         }
     }
 
-    PktValue SendLostPkt(uint32 stamp, const PktPtr &stop) {
-        if (first_ && first_ != stop) {
-            return SendFirstPktData(stamp);
-        } else {
-            return{};
-        }
-    }
-
-    PktValue SendRtoPkt(uint32 stamp, uint32 rto) {
-        if (first_ && ReadValue<u32>(first_, PKT_OFF_STAMP) + rto <= stamp) {
+    PktValue SendRtoPkt(uint32 stamp, uint32 expiry) {
+        if (first_ && ReadValue<u32>(first_, PKT_OFF_STAMP) <= expiry) {
             return SendFirstPktData(stamp);
         } else {
             return{};
@@ -202,9 +194,7 @@ public:
             if (i == seq || i < una) {
                 if (i == seq && age == ReadValue<u8>(ptr, PKT_OFF_AGE)) {
                     rst.stamp = ReadValue<u32>(ptr, PKT_OFF_STAMP);
-                }
-                if ((i == seq) || (rst.next && rst.next == ptr)) {
-                    rst.next = next;
+                    rst.lost = ptr != first_;
                 }
                 RemovePktSent(ptr);
                 RemoveSendData(ptr);

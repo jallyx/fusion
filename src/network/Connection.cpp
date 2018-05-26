@@ -4,13 +4,14 @@
 #include "System.h"
 #include "Logger.h"
 
-Connection::Connection(ConnectionManager &manager, Session &session)
-: manager_(manager)
+Connection::Connection(boost::asio::io_service &io_service,
+    ConnectionManager &manager, Session &session, int load_value)
+: load_value_(load_value)
+, manager_(manager)
 , session_(session)
 , is_active_(false)
-, strand_(manager.io_service())
-, resolver_(manager.io_service())
-, sock_(manager.io_service())
+, resolver_(io_service)
+, sock_(io_service)
 , port_(0)
 , is_connected_(false)
 , recv_buffer_(MAX_NET_PACKET_SIZE+1)
@@ -21,8 +22,8 @@ Connection::Connection(ConnectionManager &manager, Session &session)
 , is_residual_send_data_(false)
 , is_reading_{ATOMIC_FLAG_INIT}
 , is_writing_{ATOMIC_FLAG_INIT}
-, last_recv_data_time_(GET_SYS_TIME)
-, last_send_data_time_(GET_SYS_TIME)
+, last_recv_data_time_(GET_APP_TIME)
+, last_send_data_time_(GET_APP_TIME)
 {
 }
 
@@ -46,7 +47,7 @@ bool Connection::HasSendDataAwaiting() const
 
 size_t Connection::GetSendDataSize() const
 {
-    return (final_send_buffer_ ? final_send_buffer_->GetReadableSpace() : 0) +
+    return (final_send_buffer_ ? final_send_buffer_->GetSafeDataSize() : 0) +
         send_buffer_.GetDataSize();
 }
 
@@ -79,12 +80,12 @@ void Connection::Close()
     }
 }
 
-void Connection::SetSocket(const asio::ip::tcp::socket::protocol_type &protocol, SOCKET socket)
+void Connection::SetSocket(const boost::asio::ip::tcp::socket::protocol_type &protocol, SOCKET socket)
 {
     is_active_ = is_connected_ = true;
     sock_.assign(protocol, socket);
     sock_.non_blocking(true);
-    sock_.set_option(asio::ip::tcp::no_delay(true));
+    sock_.set_option(boost::asio::ip::tcp::no_delay(true));
     RenewRemoteEndpoint();
 }
 
@@ -94,30 +95,33 @@ void Connection::AsyncConnect(const std::string &address, const std::string &por
     addr_ = address;
     port_ = atoi(port.c_str());
 
-    asio::ip::tcp::resolver::query query(address, port);
-    resolver_.async_resolve(query, strand_.wrap(
+    boost::asio::ip::tcp::resolver::query query(address, port);
+    resolver_.async_resolve(query,
         std::bind(&Connection::OnResolveComplete, shared_from_this(),
-                  std::placeholders::_1, std::placeholders::_2)));
+                  std::placeholders::_1, std::placeholders::_2));
 }
 
 void Connection::PostReadRequest()
 {
     if (!is_reading_.test_and_set()) {
-        strand_.dispatch(std::bind(&Connection::StartNextRead, shared_from_this()));
+        sock_.get_io_service().post(
+            std::bind(&Connection::StartNextRead, shared_from_this()));
     }
 }
 
 void Connection::PostWriteRequest()
 {
     if (IsConnected() && !is_writing_.test_and_set()) {
-        strand_.dispatch(std::bind(&Connection::StartNextWrite, shared_from_this()));
+        sock_.get_io_service().post(
+            std::bind(&Connection::StartNextWrite, shared_from_this()));
     }
 }
 
 void Connection::PostCloseRequest()
 {
     if (IsActive()) {
-        strand_.dispatch(std::bind(&Connection::Close, shared_from_this()));
+        sock_.get_io_service().post(
+            std::bind(&Connection::Close, shared_from_this()));
     }
 }
 
@@ -131,12 +135,12 @@ void Connection::StartNextRead()
 
         size_t size = 0;
         char *buffer = GetRecvDataBuffer(size);
-        sock_.async_read_some(asio::buffer(buffer, size), strand_.wrap(
+        sock_.async_read_some(boost::asio::buffer(buffer, size),
             std::bind(&Connection::OnReadComplete, shared_from_this(),
-                      std::placeholders::_1, buffer, std::placeholders::_2)));
+                      std::placeholders::_1, buffer, std::placeholders::_2));
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("StartNextRead[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -162,9 +166,9 @@ void Connection::StartNextWrite()
         size_t size = 0;
         const char *buffer = PreprocessAndGetSendDataBuffer(size);
         if (buffer != nullptr && size != 0) {
-            sock_.async_write_some(asio::buffer(buffer, size), strand_.wrap(
+            sock_.async_write_some(boost::asio::buffer(buffer, size),
                 std::bind(&Connection::OnWriteComplete, shared_from_this(),
-                          std::placeholders::_1, buffer, std::placeholders::_2)));
+                          std::placeholders::_1, buffer, std::placeholders::_2));
         } else {
             is_writing_.clear();
             if (HasSendDataAwaiting() && !is_writing_.test_and_set()) {
@@ -173,7 +177,7 @@ void Connection::StartNextWrite()
         }
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("StartNextWrite[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -188,7 +192,7 @@ void Connection::StartNextWrite()
     } CATCH_END
 }
 
-void Connection::OnResolveComplete(const asio::error_code &ec, asio::ip::tcp::resolver::iterator itr)
+void Connection::OnResolveComplete(const boost::system::error_code &ec, boost::asio::ip::tcp::resolver::iterator itr)
 {
     TRY_BEGIN {
 
@@ -202,14 +206,14 @@ void Connection::OnResolveComplete(const asio::error_code &ec, asio::ip::tcp::re
             return;
         }
 
-        last_recv_data_time_ = GET_SYS_TIME;
-        last_send_data_time_ = GET_SYS_TIME;
-        sock_.async_connect(*itr, strand_.wrap(
+        last_recv_data_time_ = GET_APP_TIME;
+        last_send_data_time_ = GET_APP_TIME;
+        sock_.async_connect(*itr,
             std::bind(&Connection::OnConnectComplete, shared_from_this(),
-                      std::placeholders::_1)));
+                      std::placeholders::_1));
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("OnResolveComplete[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -224,7 +228,7 @@ void Connection::OnResolveComplete(const asio::error_code &ec, asio::ip::tcp::re
     } CATCH_END
 }
 
-void Connection::OnConnectComplete(const asio::error_code &ec)
+void Connection::OnConnectComplete(const boost::system::error_code &ec)
 {
     TRY_BEGIN {
 
@@ -238,17 +242,17 @@ void Connection::OnConnectComplete(const asio::error_code &ec)
             return;
         }
 
-        last_recv_data_time_ = GET_SYS_TIME;
-        last_send_data_time_ = GET_SYS_TIME;
+        last_recv_data_time_ = GET_APP_TIME;
+        last_send_data_time_ = GET_APP_TIME;
         is_connected_ = true;
         sock_.non_blocking(true);
-        sock_.set_option(asio::ip::tcp::no_delay(true));
+        sock_.set_option(boost::asio::ip::tcp::no_delay(true));
         PostReadRequest();
         PostWriteRequest();
         session_.OnConnected();
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("OnConnectComplete[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -263,7 +267,7 @@ void Connection::OnConnectComplete(const asio::error_code &ec)
     } CATCH_END
 }
 
-void Connection::OnReadComplete(const asio::error_code &ec, const char *buffer, std::size_t bytes)
+void Connection::OnReadComplete(const boost::system::error_code &ec, const char *buffer, std::size_t bytes)
 {
     TRY_BEGIN {
 
@@ -277,12 +281,12 @@ void Connection::OnReadComplete(const asio::error_code &ec, const char *buffer, 
             return;
         }
 
-        last_recv_data_time_ = GET_SYS_TIME;
+        last_recv_data_time_ = GET_APP_TIME;
         OnRecvDataCallback(buffer, bytes);
         StartNextRead();
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("OnReadComplete[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -297,7 +301,7 @@ void Connection::OnReadComplete(const asio::error_code &ec, const char *buffer, 
     } CATCH_END
 }
 
-void Connection::OnWriteComplete(const asio::error_code &ec, const char *buffer, std::size_t bytes)
+void Connection::OnWriteComplete(const boost::system::error_code &ec, const char *buffer, std::size_t bytes)
 {
     TRY_BEGIN {
 
@@ -311,12 +315,12 @@ void Connection::OnWriteComplete(const asio::error_code &ec, const char *buffer,
             return;
         }
 
-        last_send_data_time_ = GET_SYS_TIME;
+        last_send_data_time_ = GET_APP_TIME;
         OnSendDataCallback(buffer, bytes);
         StartNextWrite();
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("OnWriteComplete[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -486,8 +490,8 @@ void Connection::PreprocessSendData()
 
 void Connection::RenewRemoteEndpoint()
 {
-    asio::error_code ec;
-    asio::ip::tcp::endpoint endpoint = sock_.remote_endpoint(ec);
+    boost::system::error_code ec;
+    boost::asio::ip::tcp::endpoint endpoint = sock_.remote_endpoint(ec);
     if (!ec) {
         addr_ = endpoint.address().to_string();
         port_ = endpoint.port();

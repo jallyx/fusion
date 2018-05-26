@@ -57,7 +57,7 @@ int LuaMgr::CacheFile(lua_State *L, const std::string &fileName)
         }
     } while (0);
 
-    int errcode = !chunk.empty() ?
+    int errcode = !chunk.empty() && false ?
         luaL_loadbuffer(L, chunk.data(), chunk.size(), fileName.c_str()) :
         luaL_loadfile(L, fileName.c_str());
     if (errcode == 0) {

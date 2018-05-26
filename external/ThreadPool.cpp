@@ -68,3 +68,13 @@ void ThreadPool::ClearThreads()
     }
     threads_.clear();
 }
+
+Thread *ThreadPool::GetThreadInstance(size_t index) const
+{
+    return index < threads_.size() ? threads_[index] : nullptr;
+}
+
+size_t ThreadPool::GetThreadNumber() const
+{
+    return threads_.size();
+}

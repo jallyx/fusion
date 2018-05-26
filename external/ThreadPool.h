@@ -26,6 +26,9 @@ protected:
 
     void PushThread(Thread *thread);
 
+    Thread *GetThreadInstance(size_t index) const;
+    size_t GetThreadNumber() const;
+
 private:
     void ClearThreads();
 

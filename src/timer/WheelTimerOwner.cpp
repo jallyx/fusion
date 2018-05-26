@@ -34,8 +34,7 @@ protected:
     {
         if (owner_.expired()) return false;
         itr_ = owner_.lock()->timers_.emplace(type_, this);
-        WheelTimer::OnPrepare();
-        return true;
+        return WheelTimer::OnPrepare();
     }
 
     virtual void OnActivate()

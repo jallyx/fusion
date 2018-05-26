@@ -14,6 +14,11 @@ public:
 protected:
     virtual ~WheelTrigger();
     virtual bool OnPrepare();
+    virtual void OnActivate();
+
+    virtual void OnActive() {}
+
+    void GoNextActiveTime();
 
     void set_point_time(time_t t) { point_time_ = t; }
     void go_previous_point_time() { point_time_ -= active_interval(); }

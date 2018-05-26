@@ -7,7 +7,7 @@ class Connectless;
 class Sessionless : public Session
 {
 public:
-    Sessionless(bool isRapidMode = false);
+    Sessionless();
     virtual ~Sessionless();
 
     void SetConnectless(std::shared_ptr<Connectless> &&conn);
@@ -24,9 +24,15 @@ public:
     virtual bool HasSendDataAwaiting() const;
     virtual size_t GetSendDataSize() const;
 
+    virtual int GetConnectlessLoadValue() const;
+
     virtual void OnReadyConnectless() {}
 
+    void SetFeasible(bool value) { is_feasible_ = value; }
+    bool IsFeasible() const { return is_feasible_; }
+
 private:
+    bool is_feasible_;
     std::shared_ptr<Connectless> connectless_;
     uint64 last_recv_pck_time_, last_send_pck_time_;
 };

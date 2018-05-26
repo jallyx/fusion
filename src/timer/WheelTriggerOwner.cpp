@@ -47,11 +47,10 @@ protected:
     {
         if (owner_.expired()) return false;
         itr_ = owner_.lock()->triggers_.emplace(type_, this);
-        WheelTrigger::OnPrepare();
-        return true;
+        return WheelTrigger::OnPrepare();
     }
 
-    virtual void OnActivate()
+    virtual void OnActive()
     {
         cb_();
     }
@@ -84,19 +83,18 @@ public:
 protected:
     virtual bool OnPrepare()
     {
-        if (GetCurrentTickTime() > uint64(GET_UNIX_TIME)) {
+        if (GetActualTickTime() > uint64(GET_UNIX_TIME)) {
             WLOG("CreateTriggerByMonthly is invalid.");
             return false;
         }
-        WheelTriggerOwner::Trigger::OnPrepare();
-        return true;
+        return Trigger::OnPrepare();
     }
 
-    virtual void OnActivate()
+    virtual void OnActive()
     {
         set_point_time(CalcNextTriggerPointTimeByMonthly(trigger_point_));
         SetNextActiveTime(point_time());
-        Trigger::OnActivate();
+        Trigger::OnActive();
     }
 
 private:

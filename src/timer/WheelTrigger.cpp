@@ -19,11 +19,24 @@ WheelTrigger::~WheelTrigger()
 {
 }
 
+void WheelTrigger::GoNextActiveTime()
+{
+    const time_t actual_tick_time = GetActualTickTime();
+    while (actual_tick_time > point_time()) {
+        go_next_point_time();
+    }
+}
+
 bool WheelTrigger::OnPrepare()
 {
-    const time_t current_tick_time = GetCurrentTickTime();
-    while (current_tick_time > point_time())
-        go_next_point_time();
+    GoNextActiveTime();
     SetNextActiveTime(point_time());
     return true;
+}
+
+void WheelTrigger::OnActivate()
+{
+    GoNextActiveTime();
+    SetNextActiveTime(point_time());
+    OnActive();
 }

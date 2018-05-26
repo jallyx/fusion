@@ -1,14 +1,15 @@
 #pragma once
 
+#include "Singleton.h"
 #include <unordered_set>
 #include "Session.h"
 #include "ThreadSafeQueue.h"
 
-class SessionManager
+class SessionManager : public Singleton<SessionManager>
 {
 public:
     SessionManager();
-    ~SessionManager();
+    virtual ~SessionManager();
 
     void Update();
     void Tick();
@@ -18,6 +19,10 @@ public:
     void KillSession(Session *session);
     void ShutdownSession(Session *session);
 
+    void SetExternalCleanup(const std::function<void()> &func) {
+        external_cleanup_ = func;
+    }
+
 private:
     void RemoveSession(Session *session);
 
@@ -26,9 +31,12 @@ private:
     void TickSessions();
 
     void ShutdownAll();
-    void ClearAll();
 
     std::unordered_set<Session*> sessions_;
     ThreadSafeQueue<Session*> waiting_room_;
     ThreadSafeQueue<Session*> recycle_bin_;
+
+    std::function<void()> external_cleanup_;
 };
+
+#define sSessionManager (*SessionManager::instance())

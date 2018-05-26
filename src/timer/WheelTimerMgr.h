@@ -39,8 +39,9 @@ private:
     std::vector<size_t> pointer_slot_;
     std::vector<std::vector<std::list<WheelTimer*>>> all_timer_;
 
-    std::list<WheelTimer*> push_pool_, pop_pool_;
-    std::mutex push_mutex_, pop_mutex_;
-
+    uint64 actual_tick_count_;
     std::list<WheelTimer*> anchor_container_;
+
+    std::mutex push_mutex_, pop_mutex_;
+    std::list<WheelTimer*> push_pool_, pop_pool_;
 };

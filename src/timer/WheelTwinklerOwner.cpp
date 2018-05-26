@@ -56,8 +56,7 @@ protected:
     {
         if (owner_.expired()) return false;
         itr_ = owner_.lock()->twinklers_.emplace(routine_type_, this);
-        WheelTwinkler::OnPrepare();
-        return true;
+        return WheelTwinkler::OnPrepare();
     }
 
     virtual void OnStartActive()
@@ -99,12 +98,14 @@ public:
 protected:
     virtual bool OnPrepare()
     {
-        if (GetCurrentTickTime() > uint64(GET_UNIX_TIME)) {
+        if (GetActualTickTime() > uint64(GET_UNIX_TIME)) {
             WLOG("CreateTwinklerByMonthly is invalid.");
             return false;
         }
-        time_t init_point_time = point_time();
-        WheelTwinklerOwner::Twinkler::OnPrepare();
+        const time_t init_point_time = point_time();
+        if (!Twinkler::OnPrepare()) {
+            return false;
+        }
         if (point_time() != init_point_time) {
             set_point_time(CalcNextTriggerPointTimeByMonthly(trigger_point_));
             SetNextActiveTime(point_time());

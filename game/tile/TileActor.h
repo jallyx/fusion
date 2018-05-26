@@ -12,7 +12,7 @@ public:
     void OnMove(float x, float z);
     void OnPopup();
 
-    virtual void UpdateActive(int dt) = 0;
+    virtual void UpdateActive() = 0;
 
     TileActor *NextActor() const {
         MapTile::ActorItr itr = std::next(itr_);

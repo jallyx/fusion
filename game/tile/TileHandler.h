@@ -16,17 +16,18 @@ public:
 
     void TryRecycleTile(MapTile *tile);
 
-    void UpdateActive(int dt);
+    void UpdateActive();
 
     const TileDefine &tile_define() const { return tile_define_; }
-    TileActor *&anchor() { return anchor_; }
+    MapTile *&anchor_tile() { return anchor_tile_; }
+    TileActor *&anchor_actor() { return anchor_actor_; }
 
 private:
     const TileDefine &tile_define_;
     MapTile ***tiles_;
-    TileActor *anchor_;
+    MapTile *anchor_tile_;
+    TileActor *anchor_actor_;
 
     const static size_t group_count_ = 3;
-    int group_time_[group_count_];
     int tick_count_;
 };

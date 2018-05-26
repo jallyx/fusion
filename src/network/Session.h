@@ -2,14 +2,15 @@
 
 #include <memory>
 #include <unordered_map>
+#include "NetBuffer.h"
 #include "NetPacket.h"
-#include "ThreadSafeDoubleQueue.h"
+#include "MultiBufferQueue.h"
 
 class SessionManager;
 class Connection;
 
 enum SessionHandleStatus {
-    SessionHandleSuccess,
+    SessionHandleSuccess = 256,
     SessionHandleCapture,
     SessionHandleUnhandle,
     SessionHandleWarning,
@@ -33,8 +34,10 @@ public:
         virtual void OnShutdownSession(Session *session) = 0;
     };
 
-    Session(bool isDeflatePacket = false, bool isInflatePacket = false, bool isRapidMode = false);
+    Session(bool isDeflatePacket = false, bool isInflatePacket = false);
     virtual ~Session();
+
+    void ConnectServer(const std::string &address, const std::string &port);
 
     void SetConnection(std::shared_ptr<Connection> &&conn);
     const std::shared_ptr<Connection> &GetConnection() const;
@@ -69,6 +72,8 @@ public:
     virtual bool HasSendDataAwaiting() const;
     virtual size_t GetSendDataSize() const;
 
+    virtual int GetConnectionLoadValue() const;
+
     const std::string &GetHost() const;
     unsigned long GetIPv4() const;
     unsigned short GetPort() const;
@@ -83,10 +88,12 @@ public:
 
     bool is_deflate_packet() const { return is_deflate_packet_; }
     bool is_inflate_packet() const { return is_inflate_packet_; }
-    bool is_rapid_mode() const { return is_rapid_mode_; }
 
     uint64 last_recv_pck_time() const { return last_recv_pck_time_; }
     uint64 last_send_pck_time() const { return last_send_pck_time_; }
+
+    static void InitPacketQueuePool();
+    static void ClearPacketQueuePool();
 
 protected:
     virtual void OnRecvPacket(INetPacket *pck);
@@ -98,16 +105,18 @@ private:
     class LargePacketHelper;
     void PushRecvFragmentPacket(INetPacket *pck);
     void PushSendOverflowPacket(const INetPacket &pck);
+    void PushSendOverflowPacket(const INetPacket &pck, const INetPacket &data);
+    void PushSendOverflowPacket(const INetPacket &pck, const char *data, size_t size);
+    void PushSendFragmentPacket(uint32 opcode, ConstNetBuffer datas[], size_t count);
 
     const bool is_deflate_packet_;
     const bool is_inflate_packet_;
-    const bool is_rapid_mode_;
 
     Status status_;
     SessionManager *manager_;
 
     std::shared_ptr<Connection> connection_;
-    ThreadSafeDoubleQueue<INetPacket*, 128> recv_queue_;
+    MultiBufferQueue<INetPacket*, 128> recv_queue_;
 
     IEventObserver *event_observer_;
     bool is_overstocked_packet_;

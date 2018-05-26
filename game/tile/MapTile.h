@@ -19,7 +19,7 @@ public:
     ActorItr MigrateActor(MapTile *tile, ActorItr itr);
     void RemoveActor(ActorItr itr);
 
-    void UpdateActive(int dt);
+    void UpdateActive();
 
     ActorItr ActorBegin() { return actors_.begin(); }
     ActorItr ActorEnd() { return actors_.end(); }
@@ -53,6 +53,8 @@ public:
     }
 
 private:
+    class AutoAnchorTile;
+
     TileHandler * const handler_;
     size_t const x_, z_;
 

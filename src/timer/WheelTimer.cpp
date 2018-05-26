@@ -29,11 +29,16 @@ void WheelTimer::RePush(uint64 next_active_time)
     }
 }
 
+void WheelTimer::SetLoop(uint32 loop_count)
+{
+    loop_count_ = loop_count;
+}
+
 void WheelTimer::SetNextActiveTime(uint64 next_active_time)
 {
     if (next_active_time == 0) {
         uint64 active_tick_interval = active_interval_ / mgr_->tick_particle_;
-        active_tick_count_ = active_tick_interval + mgr_->tick_count_;
+        active_tick_count_ = active_tick_interval + mgr_->actual_tick_count_ - 1;
     } else {
         active_tick_count_ = next_active_time / mgr_->tick_particle_;
         if (active_tick_count_ < mgr_->tick_count_) {
@@ -47,6 +52,11 @@ void WheelTimer::FixFirstActiveTime()
     if (active_tick_count_ < mgr_->tick_count_) {
         active_tick_count_ = mgr_->tick_count_;
     }
+}
+
+uint64 WheelTimer::GetActualTickTime() const
+{
+    return mgr_->tick_particle_ * mgr_->actual_tick_count_;
 }
 
 uint64 WheelTimer::GetCurrentTickTime() const

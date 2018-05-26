@@ -1,11 +1,14 @@
 #include "ServerMaster.h"
-#include "network/Connection.h"
-#include "NetPacket.h"
+#include "network/IOServiceManager.h"
+#include "network/SessionManager.h"
+#include "network/ConnectionManager.h"
+#include "udp/ConnectlessManager.h"
+#include "async/AsyncTaskMgr.h"
 #include "Logger.h"
 #include "OS.h"
+#include "System.h"
 #include "CoreDumper.h"
 #include "SignalHandler.h"
-#include "System.h"
 
 IServerMaster *IServerMaster::instance_ = nullptr;
 IServerMaster::IServerMaster()
@@ -18,22 +21,38 @@ IServerMaster::IServerMaster()
     System::Init();
     System::Update();
 
+    Session::InitPacketQueuePool();
     Connection::InitSendBufferPool();
+    Connectless::InitQueueBufferPool();
     INetPacket::InitNetPacketPool();
     CoreDumper::newInstance();
     SignalHandler::newInstance();
     Logger::newInstance();
+
+    AsyncTaskMgr::newInstance();
+    IOServiceManager::newInstance();
+    SessionManager::newInstance();
+    ConnectionManager::newInstance();
+    ConnectlessManager::newInstance();
 }
 
 IServerMaster::~IServerMaster()
 {
     instance_ = nullptr;
 
+    Session::ClearPacketQueuePool();
     Connection::ClearSendBufferPool();
+    Connectless::ClearQueueBufferPool();
     INetPacket::ClearNetPacketPool();
     CoreDumper::deleteInstance();
     SignalHandler::deleteInstance();
     Logger::deleteInstance();
+
+    AsyncTaskMgr::deleteInstance();
+    IOServiceManager::deleteInstance();
+    SessionManager::deleteInstance();
+    ConnectionManager::deleteInstance();
+    ConnectlessManager::deleteInstance();
 }
 
 bool IServerMaster::ParseConfigFile(KeyFile &config, const std::string &file)
@@ -76,8 +95,20 @@ int IServerMaster::Initialize(int argc, char *argv[])
 
 int IServerMaster::Run(int argc, char *argv[])
 {
+    sAsyncTaskMgr.SetWorkerCount(GetAsyncServiceCount());
+    if (!sAsyncTaskMgr.Start()) {
+        ELOG("--- sAsyncTaskMgr.Start() failed.");
+        return -1;
+    }
+
+    sIOServiceManager.SetWorkerCount(GetIOServiceCount());
+    if (!sIOServiceManager.Start()) {
+        ELOG("--- sIOServiceManager.Start() failed.");
+        return -1;
+    }
+
     if (!StartServices()) {
-        ELOG("StartService() failed.");
+        ELOG("StartServices() failed.");
         return -1;
     }
 
@@ -88,8 +119,8 @@ int IServerMaster::Run(int argc, char *argv[])
     };
 
     while (!is_end_ || delay_end_ > 0) {
-        OS::SleepMS(1000);
-        Tick();
+        OS::SleepMS(10);
+        System::Update();
 
 #if defined(_WIN32)
         HANDLE keyboard = GetStdHandle(STD_INPUT_HANDLE);
@@ -114,10 +145,18 @@ int IServerMaster::Run(int argc, char *argv[])
         }
 #endif
 
-        delay_end_ = std::max(0, delay_end_ - 1000);
+        static int tick = 0;
+        if (++tick >= 100) {
+            tick = 0;
+            Tick();
+        }
+
+        delay_end_ = std::max(0, delay_end_ - 1);
     }
 
     StopServices();
+    sIOServiceManager.Stop();
+    sAsyncTaskMgr.Stop();
     sLogger.Stop();
 
     return 0;

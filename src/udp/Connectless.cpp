@@ -2,27 +2,31 @@
 #include "ConnectlessManager.h"
 #include "Sessionless.h"
 #include "System.h"
-#include <functional>
+#include "Logger.h"
 
-Connectless::Connectless(asio::io_service &io_service,
-    ConnectlessManager &manager, Sessionless &sessionless)
-: manager_(manager)
+Connectless::Connectless(boost::asio::io_service &io_service,
+    ConnectlessManager &manager, Sessionless &sessionless, int load_value)
+: load_value_(load_value)
+, manager_(manager)
 , sessionless_(sessionless)
 , is_active_(false)
-, strand_(io_service)
 , resolver_(io_service)
 , port_(0)
 , is_connected_(false)
 , final_recv_buffer_(MAX_NET_PACKET_SIZE+1)
 , is_residual_send_data_(false)
-, rtt_(1000)
+, srtt_(1000.f)
+, rttvar_(0.f)
 , recv_sn_{0,0}
 , send_sn_{{0},{0}}
+, rto_timer_(io_service)
+, lost_timer_(io_service)
 , is_recving_{ATOMIC_FLAG_INIT}
+, is_sending_{ATOMIC_FLAG_INIT}
 , is_reading_{ATOMIC_FLAG_INIT}
 , is_writing_{ATOMIC_FLAG_INIT}
-, last_recv_data_time_(GET_SYS_TIME)
-, last_send_data_time_(GET_SYS_TIME)
+, last_recv_data_time_(GET_APP_TIME)
+, last_send_data_time_(GET_APP_TIME)
 {
 }
 
@@ -45,7 +49,7 @@ void Connectless::Close()
         is_active_ = is_connected_ = false;
         WLOG("Close connectless from [%s:%hu].", addr_.c_str(), port_);
 
-        manager_.RemoveConnectless(key());
+        manager_.RemoveConnectless(shared_from_this());
         if (sessionless_.IsActive()) {
             sessionless_.KillSession();
         }
@@ -57,8 +61,8 @@ void Connectless::Close()
 }
 
 void Connectless::SetSocket(const std::string &key,
-        const std::shared_ptr<asio::ip::udp::socket> &socket,
-        const asio::ip::udp::socket::endpoint_type &destination)
+        const std::shared_ptr<boost::asio::ip::udp::socket> &socket,
+        const boost::asio::ip::udp::socket::endpoint_type &destination)
 {
     is_active_ = is_connected_ = true;
     sock_ = socket;
@@ -66,28 +70,24 @@ void Connectless::SetSocket(const std::string &key,
     key_ = key;
     addr_ = destination.address().to_string();
     port_ = destination.port();
+
+    sessionless_.SetFeasible(true);
+    sessionless_.OnReadyConnectless();
 }
 
 void Connectless::AsyncConnect(const std::string &key,
         const std::string &address, const std::string &port)
 {
     is_active_ = true;
-    sock_ = std::make_shared<asio::ip::udp::socket>(strand_.get_io_service());
+    sock_ = std::make_shared<boost::asio::ip::udp::socket>(resolver_.get_io_service());
     key_ = key;
     addr_ = address;
     port_ = atoi(port.c_str());
 
-    asio::ip::udp::resolver::query query(address, port);
-    resolver_.async_resolve(query, strand_.wrap(
+    boost::asio::ip::udp::resolver::query query(address, port);
+    resolver_.async_resolve(query,
         std::bind(&Connectless::OnResolveComplete, shared_from_this(),
-            std::placeholders::_1, std::placeholders::_2)));
-}
-
-void Connectless::SendBufferData(const void *data, size_t size)
-{
-    MultiBuffers buffers;
-    buffers.add(data, size);
-    SendPkt(buffers);
+                  std::placeholders::_1, std::placeholders::_2));
 }
 
 void Connectless::SendPacketReliable(const INetPacket &pck)
@@ -101,13 +101,19 @@ void Connectless::SendPacketReliable(const INetPacket &pck)
 
 void Connectless::SendPacketUnreliable(const INetPacket &pck)
 {
-    NetBuffer buffer;
-    buffer << u8(2) << send_sn_[0].load()
+    NetPacket packet;
+    packet << u8(2) << send_sn_[0].load()
         << send_sn_[1].fetch_add(1) << (u16)pck.GetOpcode();
-    MultiBuffers buffers;
-    buffers.add(buffer.GetBuffer(), buffer.GetTotalSize());
-    buffers.add(pck.GetReadableBuffer(), pck.GetReadableSize());
-    SendPkt(buffers);
+    packet_buffer_.WritePacket(
+        packet, pck.GetReadableBuffer(), pck.GetReadableSize());
+    PostPacketSendRequest();
+}
+
+void Connectless::SendBufferData(const void *data, size_t size)
+{
+    ConstNetPacket pck(data, size);
+    packet_buffer_.WritePacket(pck);
+    PostPacketSendRequest();
 }
 
 void Connectless::SendAck(uint8 age, uint64 seq, uint64 una)
@@ -124,8 +130,13 @@ void Connectless::OnPktAck(uint8 age, uint64 seq, uint64 una)
     SendQueue::OnSentPktRst rst;
     final_send_queue_.OnPktSent(age, seq, una, rst);
     if (rst.stamp != 0) {
-        rtt_ = u32(GET_REAL_APP_TIME) - rst.stamp;
-        StartLostWrite(rst.next);
+        if (rst.lost) {
+            PostPktLostWriteRequest(rst.stamp);
+        }
+        RefreshRTO(u32(GET_REAL_APP_TIME) - rst.stamp);
+    }
+    if (lost_infos_.size() > size_t(rst.lost ? 1 : 0)) {
+        CleanPktLostInfos();
     }
     if (!is_writing_.test_and_set()) {
         StartDataWrite();
@@ -155,7 +166,7 @@ void Connectless::OnRecvPkt(uint8 type, ConstNetBuffer &buffer)
                 info.pck = INetPacket::New(opcode, buffer.GetReadableSize());
                 (*info.pck).Append(
                     buffer.GetReadableBuffer(), buffer.GetReadableSize());
-                strand_.dispatch(std::bind(
+                resolver_.get_io_service().post(std::bind(
                     &Connectless::DispatchPacketUnreliable, shared_from_this(), info));
             }
             break;
@@ -164,46 +175,113 @@ void Connectless::OnRecvPkt(uint8 type, ConstNetBuffer &buffer)
             uint8 age;
             uint64 seq, una;
             buffer >> age >> seq >> una;
-            strand_.dispatch(std::bind(
+            resolver_.get_io_service().post(std::bind(
                 &Connectless::OnPktAck, shared_from_this(), age, seq, una));
             break;
         }
     }
-    last_recv_data_time_ = GET_SYS_TIME;
+    last_recv_data_time_ = GET_APP_TIME;
 }
 
 void Connectless::PostRecvRequest()
 {
     if (!is_recving_.test_and_set()) {
-        strand_.dispatch(std::bind(&Connectless::StartNextRecv, shared_from_this()));
+        resolver_.get_io_service().post(
+            std::bind(&Connectless::StartNextRecv, shared_from_this()));
     }
 }
 
 void Connectless::PostReadRequest()
 {
     if (!is_reading_.test_and_set()) {
-        strand_.dispatch(std::bind(&Connectless::StartDataRead, shared_from_this()));
+        resolver_.get_io_service().post(
+            std::bind(&Connectless::StartDataRead, shared_from_this()));
     }
 }
 
 void Connectless::PostWriteRequest()
 {
     if (IsConnected() && !is_writing_.test_and_set()) {
-        strand_.dispatch(std::bind(&Connectless::StartDataWrite, shared_from_this()));
+        resolver_.get_io_service().post(
+            std::bind(&Connectless::StartDataWrite, shared_from_this()));
+    }
+}
+
+void Connectless::PostPacketSendRequest()
+{
+    if (IsConnected() && !is_sending_.test_and_set()) {
+        resolver_.get_io_service().post(
+            std::bind(&Connectless::StartPacketSend, shared_from_this()));
     }
 }
 
 void Connectless::PostCloseRequest()
 {
     if (IsActive()) {
-        strand_.dispatch(std::bind(&Connectless::Close, shared_from_this()));
+        resolver_.get_io_service().post(
+            std::bind(&Connectless::Close, shared_from_this()));
     }
 }
 
-void Connectless::PostPktRtoRequest(uint32 rto)
+void Connectless::PostPktRtoWriteRequest(uint32 expiry)
 {
     if (IsActive()) {
-        strand_.dispatch(std::bind(&Connectless::StartRtoWrite, shared_from_this(), rto));
+        switch (expiry) {
+        case 0:
+            rto_timer_.cancel();
+            break;
+        default:
+            rto_timer_.expires_from_now(
+                boost::posix_time::milliseconds(expiry + rto() - GET_REAL_APP_TIME));
+            rto_timer_.async_wait(
+                std::bind(&Connectless::OnPktRtoWrite, shared_from_this(),
+                          std::placeholders::_1, expiry));
+            break;
+        }
+    }
+}
+
+void Connectless::PostPktLostWriteRequest(uint32 expiry)
+{
+    if (IsActive()) {
+        switch (expiry) {
+        case 0:
+            if (!lost_infos_.empty()) {
+                auto expires = lost_infos_.front().second;
+                lost_timer_.expires_from_now(
+                    boost::posix_time::milliseconds(expires - GET_REAL_APP_TIME));
+                rto_timer_.async_wait(
+                    std::bind(&Connectless::OnPktLostWrite, shared_from_this(),
+                              std::placeholders::_1, expires));
+            } else {
+                lost_timer_.cancel();
+            }
+            break;
+        default:
+            if (lost_infos_.empty() || lost_infos_.back().first < expiry) {
+                lost_infos_.emplace_back(expiry, u32(GET_REAL_APP_TIME + 9));
+            }
+            if (lost_infos_.size() == 1) {
+                lost_timer_.expires_from_now(boost::posix_time::milliseconds(9));
+                rto_timer_.async_wait(
+                    std::bind(&Connectless::OnPktLostWrite, shared_from_this(),
+                              std::placeholders::_1, lost_infos_.front().second));
+            }
+            break;
+        }
+    }
+}
+
+void Connectless::CleanPktLostInfos()
+{
+    bool change = false;
+    auto expiry = final_send_queue_.GetFirstPktStamp();
+    while (!lost_infos_.empty() && lost_infos_.front().first < expiry) {
+        lost_infos_.pop_front();
+        change = true;
+    }
+    if (change) {
+        PostPktLostWriteRequest(0);
     }
 }
 
@@ -215,13 +293,13 @@ void Connectless::StartNextRecv()
             return;
         }
 
-        auto buffer = asio::buffer(async_recv_buffer, sizeof(async_recv_buffer));
-        sock_->async_receive(buffer, strand_.wrap(
+        auto buffer = boost::asio::buffer(async_recv_buffer, sizeof(async_recv_buffer));
+        sock_->async_receive(buffer,
             std::bind(&Connectless::OnRecvComplete, shared_from_this(),
-                      std::placeholders::_1, std::placeholders::_2)));
+                      std::placeholders::_1, std::placeholders::_2));
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("StartNextRecv[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -269,7 +347,7 @@ void Connectless::StartDataRead()
         }
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("StartDataRead[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -292,7 +370,7 @@ void Connectless::StartDataWrite()
             PreprocessSendData();
             while (IsActive()) {
                 auto stamp = uint32(GET_REAL_APP_TIME);
-                auto pkt = final_send_queue_.SendRtoPkt(stamp, stamp);
+                auto pkt = final_send_queue_.SendRtoPkt(stamp, 0);
                 if (!pkt.empty()) {
                     SendPkt(pkt);
                 } else {
@@ -306,12 +384,12 @@ void Connectless::StartDataWrite()
             if (send_buffer_.HasSendDataAvail() && !final_send_queue_.IsFull() && !is_writing_.test_and_set()) {
                 StartDataWrite();
             } else {
-                manager_.RefreshConnectless(key(), final_send_queue_.GetFirstPktStamp(), rto());
+                PostPktRtoWriteRequest(final_send_queue_.GetFirstPktStamp());
             }
         }
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("StartDataWrite[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -326,81 +404,159 @@ void Connectless::StartDataWrite()
     } CATCH_END
 }
 
-void Connectless::StartRtoWrite(uint32 rto)
+void Connectless::OnPktRtoWrite(const boost::system::error_code &ec, uint32 expiry)
 {
     TRY_BEGIN {
+
+        if (ec) {
+            if (ec != boost::asio::error::operation_aborted) {
+                WLOG("PktRto connectless[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
+                Close();
+            }
+            return;
+        }
+
+        if (last_recv_data_time_ <= expiry) {
+            UpsideRTO();
+        }
 
         const size_t num = final_send_queue_.GetPktNum();
         for (size_t i = 0; i < num && IsActive(); ++i) {
             auto stamp = uint32(GET_REAL_APP_TIME);
-            auto pkt = final_send_queue_.SendRtoPkt(stamp, rto);
+            auto pkt = final_send_queue_.SendRtoPkt(stamp, expiry);
             if (!pkt.empty()) {
-                for (int i = 0; i < 2; ++i) {
-                    SendPkt(pkt);
-                }
+                SendPkt(pkt);
             } else {
                 break;
             }
         }
 
         if (IsActive()) {
-            manager_.RefreshConnectless(key(), final_send_queue_.GetFirstPktStamp(), this->rto());
+            if (!lost_infos_.empty()) {
+                while (!lost_infos_.empty() && lost_infos_.front().first <= expiry) {
+                    lost_infos_.pop_front();
+                }
+                PostPktLostWriteRequest(0);
+            }
+        }
+
+        if (IsActive()) {
+            PostPktRtoWriteRequest(final_send_queue_.GetFirstPktStamp());
         }
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
-        WLOG("StartRtoWrite[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
+    CATCH_BEGIN(const boost::system::system_error &e) {
+        WLOG("OnPktRtoWrite[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
     CATCH_BEGIN(const IException &e) {
-        WLOG("StartRtoWrite[%s:%hu] exception occurred.", addr_.c_str(), port_);
+        WLOG("OnPktRtoWrite[%s:%hu] exception occurred.", addr_.c_str(), port_);
         e.Print();
         Close();
     } CATCH_END
     CATCH_BEGIN(...) {
-        WLOG("StartRtoWrite[%s:%hu] unknown exception occurred.", addr_.c_str(), port_);
+        WLOG("OnPktRtoWrite[%s:%hu] unknown exception occurred.", addr_.c_str(), port_);
         Close();
     } CATCH_END
 }
 
-void Connectless::StartLostWrite(const SendQueue::PktPtr &stop)
+void Connectless::OnPktLostWrite(const boost::system::error_code &ec, uint32 expires)
 {
     TRY_BEGIN {
+
+        if (ec) {
+            if (ec != boost::asio::error::operation_aborted) {
+                WLOG("PktLost connectless[%s:%hu], %s.", addr_.c_str(), port_, ec.message().c_str());
+                Close();
+            }
+            return;
+        }
+
+        uint32 expiry = 0;
+        for (; !lost_infos_.empty(); lost_infos_.pop_front()) {
+            const auto& pair = lost_infos_.front();
+            if (pair.second <= expires) {
+                expiry = pair.first;
+            } else {
+                break;
+            }
+        }
 
         const size_t num = final_send_queue_.GetPktNum();
         for (size_t i = 0; i < num && IsActive(); ++i) {
             auto stamp = uint32(GET_REAL_APP_TIME);
-            auto pkt = final_send_queue_.SendLostPkt(stamp, stop);
+            auto pkt = final_send_queue_.SendRtoPkt(stamp, expiry);
             if (!pkt.empty()) {
-                for (int i = 0; i < 2; ++i) {
-                    SendPkt(pkt);
-                }
+                SendPkt(pkt);
             } else {
                 break;
             }
         }
 
         if (IsActive()) {
-            manager_.RefreshConnectless(key(), final_send_queue_.GetFirstPktStamp(), this->rto());
+            if (!lost_infos_.empty()) {
+                PostPktLostWriteRequest(0);
+            }
+        }
+
+        if (IsActive()) {
+            PostPktRtoWriteRequest(final_send_queue_.GetFirstPktStamp());
         }
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
-        WLOG("StartLostWrite[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
+    CATCH_BEGIN(const boost::system::system_error &e) {
+        WLOG("OnPktLostWrite[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
     CATCH_BEGIN(const IException &e) {
-        WLOG("StartLostWrite[%s:%hu] exception occurred.", addr_.c_str(), port_);
+        WLOG("OnPktLostWrite[%s:%hu] exception occurred.", addr_.c_str(), port_);
         e.Print();
         Close();
     } CATCH_END
     CATCH_BEGIN(...) {
-        WLOG("StartLostWrite[%s:%hu] unknown exception occurred.", addr_.c_str(), port_);
+        WLOG("OnPktLostWrite[%s:%hu] unknown exception occurred.", addr_.c_str(), port_);
         Close();
     } CATCH_END
 }
 
-void Connectless::OnResolveComplete(const asio::error_code &ec, asio::ip::udp::resolver::iterator itr)
+void Connectless::StartPacketSend()
+{
+    TRY_BEGIN {
+
+        while (IsActive() && packet_buffer_.HasSendDataAvail()) {
+            if (ReadPacketUnreliableFromBuffer()) {
+                MultiBuffers buffers;
+                buffers.add(packet_cache_.GetReadableBuffer(),
+                    packet_cache_.GetReadableSize());
+                SendPkt(buffers);
+                packet_cache_.Clear();
+            }
+        }
+
+        is_sending_.clear();
+        if (IsActive()) {
+            if (packet_buffer_.HasSendDataAvail() && !is_sending_.test_and_set()) {
+                StartPacketSend();
+            }
+        }
+
+    } TRY_END
+    CATCH_BEGIN(const boost::system::system_error &e) {
+        WLOG("StartPacketSend[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
+        Close();
+    } CATCH_END
+    CATCH_BEGIN(const IException &e) {
+        WLOG("StartPacketSend[%s:%hu] exception occurred.", addr_.c_str(), port_);
+        e.Print();
+        Close();
+    } CATCH_END
+    CATCH_BEGIN(...) {
+        WLOG("StartPacketSend[%s:%hu] unknown exception occurred.", addr_.c_str(), port_);
+        Close();
+    } CATCH_END
+}
+
+void Connectless::OnResolveComplete(const boost::system::error_code &ec, boost::asio::ip::udp::resolver::iterator itr)
 {
     TRY_BEGIN {
 
@@ -414,14 +570,14 @@ void Connectless::OnResolveComplete(const asio::error_code &ec, asio::ip::udp::r
             return;
         }
 
-        last_recv_data_time_ = GET_SYS_TIME;
-        last_send_data_time_ = GET_SYS_TIME;
-        sock_->async_connect(*itr, strand_.wrap(
+        last_recv_data_time_ = GET_APP_TIME;
+        last_send_data_time_ = GET_APP_TIME;
+        sock_->async_connect(*itr,
             std::bind(&Connectless::OnConnectComplete, shared_from_this(),
-                      std::placeholders::_1)));
+                      std::placeholders::_1));
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("OnResolveComplete[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -436,7 +592,7 @@ void Connectless::OnResolveComplete(const asio::error_code &ec, asio::ip::udp::r
     } CATCH_END
 }
 
-void Connectless::OnConnectComplete(const asio::error_code &ec)
+void Connectless::OnConnectComplete(const boost::system::error_code &ec)
 {
     TRY_BEGIN {
 
@@ -450,8 +606,8 @@ void Connectless::OnConnectComplete(const asio::error_code &ec)
             return;
         }
 
-        last_recv_data_time_ = GET_SYS_TIME;
-        last_send_data_time_ = GET_SYS_TIME;
+        last_recv_data_time_ = GET_APP_TIME;
+        last_send_data_time_ = GET_APP_TIME;
         is_connected_ = true;
         sock_->non_blocking(true);
         PostRecvRequest();
@@ -459,7 +615,7 @@ void Connectless::OnConnectComplete(const asio::error_code &ec)
         sessionless_.OnReadyConnectless();
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("OnConnectComplete[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -474,7 +630,7 @@ void Connectless::OnConnectComplete(const asio::error_code &ec)
     } CATCH_END
 }
 
-void Connectless::OnRecvComplete(const asio::error_code &ec, std::size_t bytes)
+void Connectless::OnRecvComplete(const boost::system::error_code &ec, std::size_t bytes)
 {
     TRY_BEGIN {
 
@@ -493,7 +649,7 @@ void Connectless::OnRecvComplete(const asio::error_code &ec, std::size_t bytes)
         StartNextRecv();
 
     } TRY_END
-    CATCH_BEGIN(const asio::system_error &e) {
+    CATCH_BEGIN(const boost::system::system_error &e) {
         WLOG("OnRecvComplete[%s:%hu] exception[%s] occurred.", addr_.c_str(), port_, e.what());
         Close();
     } CATCH_END
@@ -608,6 +764,42 @@ Connectless::PacketInfo Connectless::ReadPacketReliableFromBuffer()
     return info;
 }
 
+bool Connectless::ReadPacketUnreliableFromBuffer()
+{
+    auto ReadDataFromBuffer = [this](ssize_t size) {
+        while (size > 0 && IsActive() && packet_buffer_.HasSendDataAvail()) {
+            size_t inlen = 0;
+            const char *in = packet_buffer_.GetSendDataBuffer(inlen);
+            auto outlen = std::min((size_t)size, inlen);
+            packet_cache_.Append(in, outlen);
+            packet_buffer_.RemoveSendData(outlen);
+            size -= outlen;
+        }
+    };
+    auto ChannelPacketSize = [&, this](size_t size) {
+        ReadDataFromBuffer(size - packet_cache_.GetTotalSize());
+        return size <= packet_cache_.GetTotalSize();
+    };
+
+    if (!ChannelPacketSize(INetPacket::Header::SIZE)) {
+        return false;
+    }
+
+    INetPacket::Header header;
+    packet_cache_.ReadHeader(header);
+    packet_cache_.ResetReadPos();
+    if (header.len > packet_cache_.GetBufferSize()) {
+        THROW_EXCEPTION(SendDataException());
+    }
+
+    if (!ChannelPacketSize(header.len)) {
+        return false;
+    }
+
+    packet_cache_.UnpackPacket();
+    return true;
+}
+
 void Connectless::DispatchPacketUnreliable(const PacketInfo &info)
 {
     if (info.sn[0] == recv_sn_[0] && info.sn[1] > recv_sn_[1]) {
@@ -637,14 +829,35 @@ void Connectless::SendPkt(const SendQueue::PktValue &pkt)
 void Connectless::SendPkt(const MultiBuffers &buffers)
 {
     if (sock_) {
-        asio::error_code ec;
+        boost::system::error_code ec;
         if (dest_.address().is_unspecified()) {
             sock_->send(buffers, 0, ec);
         } else {
             sock_->send_to(buffers, dest_, 0, ec);
         }
     }
-    last_send_data_time_ = GET_SYS_TIME;
+    last_send_data_time_ = GET_APP_TIME;
+}
+
+void Connectless::RefreshRTO(uint32 rtt)
+{
+    const float alpha = 1 / 8.f;
+    const float beta = 1 / 4.f;
+
+    float mdev = srtt_ - rtt;
+    if (mdev < 0) mdev = -mdev;
+    rttvar_ = (1 - beta) * rttvar_ + beta * mdev;
+    srtt_ = (1 - alpha) * srtt_ + alpha * rtt;
+}
+
+void Connectless::UpsideRTO()
+{
+    srtt_ = std::max(srtt_ * 2.f, 30.f);
+}
+
+uint32 Connectless::rto() const
+{
+    return u32(srtt_ + std::max(rttvar_ * 4.f, 30.f));
 }
 
 bool Connectless::HasSendDataAwaiting() const
@@ -660,4 +873,16 @@ size_t Connectless::GetSendDataSize() const
 {
     return final_send_queue_.GetDataSize() +
         send_buffer_.GetDataSize();
+}
+
+void Connectless::InitQueueBufferPool()
+{
+    RecvQueue::InitBufferPool();
+    SendQueue::InitBufferPool();
+}
+
+void Connectless::ClearQueueBufferPool()
+{
+    RecvQueue::ClearBufferPool();
+    SendQueue::ClearBufferPool();
 }

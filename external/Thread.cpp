@@ -8,6 +8,7 @@
 
 Thread::Thread()
 : status_(Stopped)
+, thread_running_(false)
 {
 }
 
@@ -18,7 +19,7 @@ Thread::~Thread()
 bool Thread::Start()
 {
     if (!IsStopped()) {
-        return true;
+        return false;
     }
 
     if (!Prepare()) {
@@ -26,7 +27,13 @@ bool Thread::Start()
     }
 
     Resume();
-    thread_ = std::thread(std::bind(&Thread::Run, this));
+
+    try {
+        thread_ = std::thread(std::bind(&Thread::Run, this));
+        thread_running_ = true;
+    } catch (...) {
+        return false;
+    }
 
     return true;
 }
@@ -38,7 +45,15 @@ void Thread::Stop()
     }
 
     status_ = Stopped;
+
+    if (thread_running_) {
+        thread_running_ = false;
+    } else {
+        return;
+    }
+
     if (thread_.get_id() == std::this_thread::get_id()) {
+        thread_.detach();
         return;
     }
 

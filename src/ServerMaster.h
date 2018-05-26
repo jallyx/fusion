@@ -30,6 +30,8 @@ protected:
     virtual void Tick() = 0;
 
     virtual std::string GetConfigFile() = 0;
+    virtual size_t GetAsyncServiceCount() = 0;
+    virtual size_t GetIOServiceCount() = 0;
 
     static bool ParseConfigFile(KeyFile &config, const std::string &file);
 

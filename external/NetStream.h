@@ -68,11 +68,6 @@ public:
         return *this;
     }
 
-    INetStream &operator<<(bool v)
-    { v=(*(u8*)(&v))!=0; WriteStream(&v, sizeof(v)); return *this; }
-    INetStream &operator>>(bool &v)
-    { ReadStream(&v, sizeof(v)); v=(*(u8*)(&v))!=0; return *this; }
-
 #define STREAM_CONVERTER(TYPE) \
     INetStream &operator<<(TYPE v) \
     { WriteStream(&v, sizeof(v)); return *this; } \
@@ -100,6 +95,11 @@ public:
     STREAM_CONVERTER(double)
 #undef STREAM_CONVERTER
 
+    INetStream &operator<<(bool v)
+    { v=(*(u8*)(&v))!=0; WriteStream(&v, sizeof(v)); return *this; }
+    INetStream &operator>>(bool &v)
+    { ReadStream(&v, sizeof(v)); v=(*(u8*)(&v))!=0; return *this; }
+
     INetStream &operator<<(const std::string &s) {
         Write<uint16>((uint16)s.size());
         if (!s.empty()) WriteStream(s.data(), s.size());
@@ -107,7 +107,7 @@ public:
     }
     INetStream &operator>>(std::string &s) {
         s.resize(Read<uint16>());
-        if (!s.empty()) ReadStream((void*)s.data(), s.size());
+        if (!s.empty()) ReadStream(&s[0], s.size());
         return *this;
     }
 
@@ -173,7 +173,7 @@ private:
     }
     void DeleteBuffer() {
         if (buffer_ != nullptr && buffer_ != internal_) {
-            delete [] buffer_;
+            delete[] buffer_;
         }
     }
 

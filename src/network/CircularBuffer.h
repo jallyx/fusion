@@ -17,6 +17,7 @@ public:
 
     size_t GetWritableSpace() const;
     size_t GetReadableSpace() const;
+    size_t GetSafeDataSize() const;
 
     size_t Write(const char *data, size_t size);
     size_t Read(char *data, size_t size);

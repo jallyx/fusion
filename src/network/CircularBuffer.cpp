@@ -1,6 +1,7 @@
 #include "CircularBuffer.h"
 #include <string.h>
 #include <algorithm>
+#include <type_traits>
 #include "Debugger.h"
 
 CircularBuffer::CircularBuffer(size_t size)
@@ -14,7 +15,7 @@ CircularBuffer::CircularBuffer(size_t size)
 
 CircularBuffer::~CircularBuffer()
 {
-    delete [] base_;
+    delete[] base_;
 }
 
 bool CircularBuffer::IsEmpty() const
@@ -35,6 +36,11 @@ size_t CircularBuffer::GetWritableSpace() const
 size_t CircularBuffer::GetReadableSpace() const
 {
     return in_ - out_;
+}
+
+size_t CircularBuffer::GetSafeDataSize() const
+{
+    return std::max(int(in_ - out_), 0);
 }
 
 size_t CircularBuffer::Write(const char *data, size_t size)
@@ -89,9 +95,10 @@ size_t CircularBuffer::Remove(size_t size)
 
 size_t CircularBuffer::Peek(char *data, size_t size) const
 {
-    char placeholder[sizeof(CircularBuffer)];
-    memcpy(placeholder, this, sizeof(CircularBuffer));
-    CircularBuffer &other = *reinterpret_cast<CircularBuffer*>(placeholder);
+    std::aligned_storage<
+        sizeof(CircularBuffer), alignof(CircularBuffer)>::type placeholder;
+    CircularBuffer &other = *reinterpret_cast<CircularBuffer*>(&placeholder);
+    memcpy(&other, this, sizeof(CircularBuffer));
     return other.Read(data, size);
 }
 

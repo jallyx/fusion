@@ -2,10 +2,11 @@
 #include "Connectless.h"
 #include "System.h"
 
-Sessionless::Sessionless(bool isRapidMode)
-: Session(true, true, isRapidMode)
-, last_recv_pck_time_(GET_SYS_TIME)
-, last_send_pck_time_(GET_SYS_TIME)
+Sessionless::Sessionless()
+: Session(true, true)
+, is_feasible_(false)
+, last_recv_pck_time_(GET_APP_TIME)
+, last_send_pck_time_(GET_APP_TIME)
 {
 }
 
@@ -27,7 +28,8 @@ void Sessionless::PushRecvMsg(INetPacket *pck)
 {
     if (IsActive()) {
         OnRecvPacket(pck);
-        last_recv_pck_time_ = GET_SYS_TIME;
+        is_feasible_ = true;
+        last_recv_pck_time_ = GET_APP_TIME;
     } else {
         delete pck;
     }
@@ -37,7 +39,7 @@ void Sessionless::PushSendReliable(const INetPacket &pck)
 {
     if (IsActive() && connectless_) {
         connectless_->SendPacketReliable(pck);
-        last_send_pck_time_ = GET_SYS_TIME;
+        last_send_pck_time_ = GET_APP_TIME;
     }
 }
 
@@ -45,7 +47,7 @@ void Sessionless::PushSendUnreliable(const INetPacket &pck)
 {
     if (IsActive() && connectless_) {
         connectless_->SendPacketUnreliable(pck);
-        last_send_pck_time_ = GET_SYS_TIME;
+        last_send_pck_time_ = GET_APP_TIME;
     }
 }
 
@@ -53,7 +55,7 @@ void Sessionless::PushSendBufferData(const void *data, size_t size)
 {
     if (IsActive() && connectless_) {
         connectless_->SendBufferData(data, size);
-        last_send_pck_time_ = GET_SYS_TIME;
+        last_send_pck_time_ = GET_APP_TIME;
     }
 }
 
@@ -81,4 +83,9 @@ size_t Sessionless::GetSendDataSize() const
 {
     return Session::GetSendDataSize() +
         (connectless_ ? connectless_->GetSendDataSize() : 0);
+}
+
+int Sessionless::GetConnectlessLoadValue() const
+{
+    return 1;
 }

@@ -5,6 +5,7 @@
 #include "NetBuffer.h"
 #include "network/AsioHeader.h"
 
+class ConnectionManager;
 class ConnectlessManager;
 class Sessionless;
 
@@ -22,8 +23,6 @@ protected:
     virtual void Kernel();
     virtual void Finish();
 
-    virtual ConnectlessManager *GetConnectlessManager() = 0;
-    virtual asio::io_service *GetAsioServeice() = 0;
     virtual std::string GetBindAddress() = 0;
     virtual std::string GetBindPort() = 0;
 
@@ -33,13 +32,11 @@ private:
     void OnRecvPkt(const struct sockaddr_storage &addr, const char *data, size_t size);
 
     static std::string CalcKey(const struct sockaddr_storage &addr);
-    static asio::ip::udp::socket::endpoint_type Address(const struct sockaddr_storage &addr);
+    static boost::asio::ip::udp::socket::endpoint_type Address(const struct sockaddr_storage &addr);
 
     SOCKET sockfd_;
-    std::shared_ptr<asio::ip::udp::socket> socket_;
+    std::shared_ptr<boost::asio::ip::udp::socket> socket_;
 
-    ConnectlessManager *connectless_manager_;
-    asio::io_service *io_service_;
     std::string addr_;
     std::string port_;
 };

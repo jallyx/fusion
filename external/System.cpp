@@ -56,6 +56,11 @@ static inline int PassMonthTime(const struct tm &tm) {
     return (tm.tm_mday - 1) * 60*60*24 + PassDayTime(tm);
 }
 
+time_t System::GetMinuteUnixTime()
+{
+    return unix_time_ - date_time_.tm_sec;
+}
+
 time_t System::GetDayUnixTime()
 {
     return unix_time_ - PassDayTime(date_time_);

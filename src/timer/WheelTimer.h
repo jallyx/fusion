@@ -13,9 +13,11 @@ public:
     WheelTimer(uint64 active_interval, uint32 loop_count = 0);
 
     void RePush(uint64 next_active_time = 0);
+    void SetLoop(uint32 loop_count = 0);
 
     void DetachMgr();
 
+    uint64 GetActualTickTime() const;
     uint64 GetCurrentTickTime() const;
     uint64 GetNextActiveTime() const;
 
@@ -31,15 +33,10 @@ protected:
     void SetNextActiveTime(uint64 next_active_time = 0);
     void FixFirstActiveTime();
 
-    void Invalidate() {
-        loop_count_ = 1;
-    }
     void IgnoreOnceLoop() {
-        if (loop_count_ != 0)
+        if (loop_count_ != 0) {
             ++loop_count_;
-    }
-    void ReActivate() {
-        SetNextActiveTime(1);
+        }
     }
 
 private:
