@@ -1,4 +1,5 @@
 #include "TextUtils.h"
+#include <stdlib.h>
 #include <string.h>
 
 void WriteTEXT(std::ostream &stream, const char *text)

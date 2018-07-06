@@ -98,6 +98,8 @@ protected:
         System::Update();
     }
     virtual std::string GetConfigFile() { return "config"; }
+    virtual size_t GetAsyncServiceCount() { return 0; }
+    virtual size_t GetIOServiceCount() { return 0; }
 private:
     lua_State *L;
     SCVObject *scv;

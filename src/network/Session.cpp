@@ -4,10 +4,8 @@
 #include "System.h"
 #include "Logger.h"
 
-Session::Session(bool isDeflatePacket, bool isInflatePacket)
-: is_deflate_packet_(isDeflatePacket)
-, is_inflate_packet_(isInflatePacket)
-, status_(Idle)
+Session::Session()
+: status_(Idle)
 , manager_(nullptr)
 , event_observer_(nullptr)
 , is_overstocked_packet_(false)
@@ -25,11 +23,13 @@ Session::~Session()
 
 void Session::Update()
 {
+    uint32 opcode = 0;
     INetPacket *pck = nullptr;
     TRY_BEGIN {
 
         while (IsActive() && recv_queue_.Swap()) {
             while (IsActive() && recv_queue_.Dequeue(pck)) {
+                opcode = pck->GetOpcode();
                 switch (HandlePacket(pck)) {
                 case SessionHandleSuccess:
                     break;
@@ -37,19 +37,18 @@ void Session::Update()
                     pck = nullptr;
                     break;
                 case SessionHandleUnhandle:
-                    DLOG("SessionHandleUnhandle opcode[%u].", pck->GetOpcode());
+                    DLOG("SessionHandleUnhandle Opcode[%u].", opcode);
                     break;
                 case SessionHandleWarning:
-                    WLOG("Handle Opcode[%u] Warning!", pck->GetOpcode());
+                    WLOG("Handle Opcode[%u] Warning!", opcode);
                     break;
                 case SessionHandleError:
-                    ELOG("Handle Opcode[%u] Error!", pck->GetOpcode());
+                    ELOG("Handle Opcode[%u] Error!", opcode);
                     break;
                 case SessionHandleKill:
                 default:
                     WLOG("Fatal error occurred when processing opcode[%u], "
-                         "the session has been removed.",
-                         pck->GetOpcode());
+                         "the session has been removed.", opcode);
                     ShutdownSession();
                     break;
                 }
@@ -59,12 +58,12 @@ void Session::Update()
 
     } TRY_END
     CATCH_BEGIN(const IException &e) {
-        WLOG("Handle session opcode[%u] exception occurred.", pck->GetOpcode());
+        WLOG("Handle session opcode[%u] exception occurred.", opcode);
         e.Print();
         KillSession();
     } CATCH_END
     CATCH_BEGIN(...) {
-        WLOG("Handle session opcode[%u] unknown exception occurred.", pck->GetOpcode());
+        WLOG("Handle session opcode[%u] unknown exception occurred.", opcode);
         KillSession();
     } CATCH_END
 
@@ -379,14 +378,4 @@ void Session::ClearRecvPacket()
         }
         fragment_packets_.clear();
     } while (0);
-}
-
-void Session::InitPacketQueuePool()
-{
-    decltype(recv_queue_)::InitQueuePool();
-}
-
-void Session::ClearPacketQueuePool()
-{
-    decltype(recv_queue_)::ClearQueuePool();
 }

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include "noncopyable.h"
 #include "lua/LuaRef.h"
 
 class AIObject;

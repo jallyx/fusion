@@ -10,7 +10,7 @@ class SessionManager;
 class Connection;
 
 enum SessionHandleStatus {
-    SessionHandleSuccess = 256,
+    SessionHandleSuccess,
     SessionHandleCapture,
     SessionHandleUnhandle,
     SessionHandleWarning,
@@ -34,7 +34,7 @@ public:
         virtual void OnShutdownSession(Session *session) = 0;
     };
 
-    Session(bool isDeflatePacket = false, bool isInflatePacket = false);
+    Session();
     virtual ~Session();
 
     void ConnectServer(const std::string &address, const std::string &port);
@@ -86,14 +86,8 @@ public:
     void Disable() { status_ = Disabled; }
     bool IsActive() const { return status_ != Disabled; }
 
-    bool is_deflate_packet() const { return is_deflate_packet_; }
-    bool is_inflate_packet() const { return is_inflate_packet_; }
-
     uint64 last_recv_pck_time() const { return last_recv_pck_time_; }
     uint64 last_send_pck_time() const { return last_send_pck_time_; }
-
-    static void InitPacketQueuePool();
-    static void ClearPacketQueuePool();
 
 protected:
     virtual void OnRecvPacket(INetPacket *pck);
@@ -108,9 +102,6 @@ private:
     void PushSendOverflowPacket(const INetPacket &pck, const INetPacket &data);
     void PushSendOverflowPacket(const INetPacket &pck, const char *data, size_t size);
     void PushSendFragmentPacket(uint32 opcode, ConstNetBuffer datas[], size_t count);
-
-    const bool is_deflate_packet_;
-    const bool is_inflate_packet_;
 
     Status status_;
     SessionManager *manager_;

@@ -2,6 +2,9 @@
 
 #include <setjmp.h>
 #include <exception>
+#include <string>
+
+#define sBackTrace (BackTraceException().String())
 
 #define THROW_EXCEPTION(e) (throw e)
 
@@ -70,6 +73,8 @@ public:
     virtual ~BackTraceException();
 
     virtual void Print() const;
+
+    std::string String() const;
 
 protected:
     int nptrs() const { return nptrs_; }

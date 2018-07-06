@@ -18,7 +18,7 @@ public:
     }
 
     Trigger(WheelTriggerOwner *owner,
-            time_t trigger_interval, time_t trigger_point,
+            uint64 trigger_interval, uint64 trigger_point,
             const std::function<void()> &cb, uint32 type, uint32 repeats)
         : WheelTrigger(trigger_interval, trigger_point, repeats)
         , cb_(cb)
@@ -144,7 +144,7 @@ void WheelTriggerOwner::CreateTriggerX(
 }
 
 void WheelTriggerOwner::CreateTrigger(
-    time_t trigger_interval, time_t trigger_point,
+    uint64 trigger_interval, uint64 trigger_point,
     const std::function<void()> &cb, uint32 type, uint32 repeats)
 {
     GetCacheWheelTimerMgr()->Push(new Trigger(
@@ -152,7 +152,7 @@ void WheelTriggerOwner::CreateTrigger(
 }
 
 void WheelTriggerOwner::CreateTriggerX(
-    time_t trigger_interval, time_t trigger_point,
+    uint64 trigger_interval, uint64 trigger_point,
     const std::function<void()> &cb, uint32 repeats)
 {
     GetCacheWheelTimerMgr()->Push(new Trigger(

@@ -5,8 +5,6 @@
 #include "AsyncTask.h"
 #include "AsyncTaskOwner.h"
 #include "ThreadSafeQueue.h"
-#include <condition_variable>
-#include "Concurrency.h"
 
 class AsyncTaskMgr : public ThreadPool, public Singleton<AsyncTaskMgr>
 {
@@ -15,9 +13,8 @@ public:
     virtual ~AsyncTaskMgr();
 
     bool HasTask() const;
-    bool WaitTask(const void *queue);
 
-    void AddTask(AsyncTask *task, AsyncTaskOwner *owner = nullptr);
+    void AddTask(AsyncTask *task, AsyncTaskOwner *owner = nullptr, ssize_t group = -1);
     void AddHeavyTask(AsyncTask *task, AsyncTaskOwner *owner = nullptr);
 
     void SetWorkerCount(size_t count) { worker_count_ = count; }
@@ -27,13 +24,15 @@ protected:
     virtual void Finish();
 
 private:
+    void WakeIdleAsyncWorkingThread();
+
+    static auto BindAsyncTaskOwner(AsyncTask *task, AsyncTaskOwner *owner) ->
+        std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>;
+
     static std::weak_ptr<AsyncTaskOwner> null_owner_;
     size_t worker_count_;
 
-    fakelock fakelock_, heavy_fakelock_;
-    std::condition_variable_any cv_, heavy_cv_;
-    ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> tasks_;
-    ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> heavy_tasks_;
+    ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> shared_tasks_;
 };
 
 #define sAsyncTaskMgr (*AsyncTaskMgr::instance())

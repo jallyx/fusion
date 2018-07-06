@@ -14,7 +14,6 @@ public:
     static int Rand(int lower, int upper);
     static float Randf(float lower, float upper);
 
-    static time_t GetMinuteUnixTime();
     static time_t GetDayUnixTime();
     static time_t GetWeekUnixTime();
     static time_t GetMonthUnixTime();

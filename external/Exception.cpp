@@ -1,10 +1,14 @@
 #include "Exception.h"
 #include <stack>
+#include <sstream>
 #include "Logger.h"
 
 #if defined(__linux__)
     #include <execinfo.h>
 #endif
+
+#define WLOGP0(...) sLogger.Log({}, 'W', __VA_ARGS__)
+#define WLOGP1(s, ...) sLogger.Log({nullptr, nullptr, 0, s}, 'W', __VA_ARGS__)
 
 thread_local std::stack<LongJumpObject> s_long_jump_object_stack;
 AutoReleaseLongJumpObject::AutoReleaseLongJumpObject(const char *file, const char *func, int line)
@@ -26,16 +30,16 @@ void LongJumpObject::LongJump()
 {
     LongJumpObject *obj = GetTop();
     if (obj != nullptr) {
-        WLOG("will longjmp to %s, %s (line %d)", obj->file(), obj->func(), obj->line());
+        WLOGP0("will longjmp to %s, %s (line %d)", obj->file(), obj->func(), obj->line());
         longjmp(obj->GetJumpBuffer(), 1);
     } else {
-        WLOG("longjmp not set, will crash!");
+        WLOGP0("longjmp not set, will crash!");
     }
 }
 
 void LongJumpException::Print() const
 {
-    WLOG("Already done long jump.");
+    WLOGP0("Already done long jump.");
 }
 
 BackTraceException::BackTraceException()
@@ -61,16 +65,21 @@ BackTraceException::~BackTraceException()
 {
     if (backtraces_ != nullptr) {
         free(backtraces_);
-        backtraces_ = nullptr;
     }
 }
 
 void BackTraceException::Print() const
 {
-    WLOG("%s", what());
+    WLOGP1(String(), "%s", what());
+}
+
+std::string BackTraceException::String() const
+{
+    std::ostringstream stream;
     if (backtraces_ != nullptr) {
         for (int index = 0; index < nptrs_; ++index) {
-            WLOG("%s", backtraces_[index]);
+            stream << backtraces_[index] << '\n';
         }
     }
+    return stream.str();
 }

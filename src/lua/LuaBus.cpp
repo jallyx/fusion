@@ -374,16 +374,16 @@ void register_parent(lua_State *L, const char *name, const char *parent)
         lua_rawset(L, -6);
         lua_pushvalue(L, -2);
         lua_rawget(L, -5);
-        lua_Integer nx = lua_tointeger(L, -1);
+        lua_Integer n = lua_tointeger(L, -1);
         lua_pop(L, 1);
-        lua_pushvalue(L, -2);
-        lua_rawget(L, -4);
-        lua_Integer np = lua_tointeger(L, -1);
-        lua_pop(L, 1);
-        if (nx >= np) {
-            while (true) {
+        for (++n;;++n) {
+            lua_pushvalue(L, -2);
+            lua_rawget(L, -4);
+            lua_Integer x = lua_tointeger(L, -1);
+            lua_pop(L, 1);
+            if (n > x) {
                 lua_pushvalue(L, -2);
-                lua_pushinteger(L, ++nx);
+                lua_pushinteger(L, n);
                 lua_rawset(L, -5);
                 lua_pushvalue(L, -1);
                 lua_rawget(L, -4);
@@ -393,6 +393,8 @@ void register_parent(lua_State *L, const char *name, const char *parent)
                     lua_pop(L, 1);
                     break;
                 }
+            } else {
+                break;
             }
         }
         lua_pop(L, 2);

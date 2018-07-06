@@ -2,7 +2,7 @@
 
 #include <sstream>
 #include "NetStream.h"
-#include "table_controller.h"
+#include "table_interface.h"
 
 template<typename T> inline void LoadFromBinary(T &entity, const std::string &binary) {
     std::istringstream stream(binary);

@@ -17,9 +17,9 @@ public:
     void CreateTriggerX(TriggerCycle trigger_cycle, TriggerPoint trigger_point,
         const std::function<void()> &cb, uint32 repeats = 0);
 
-    void CreateTrigger(time_t trigger_interval, time_t trigger_point,
+    void CreateTrigger(uint64 trigger_interval, uint64 trigger_point,
         const std::function<void()> &cb, uint32 type, uint32 repeats = 0);
-    void CreateTriggerX(time_t trigger_interval, time_t trigger_point,
+    void CreateTriggerX(uint64 trigger_interval, uint64 trigger_point,
         const std::function<void()> &cb, uint32 repeats = 0);
 
     void RemoveTriggers(uint32 type);

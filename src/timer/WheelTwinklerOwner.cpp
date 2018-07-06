@@ -22,7 +22,7 @@ public:
     }
 
     Twinkler(WheelTwinklerOwner *owner,
-             time_t trigger_interval, time_t trigger_point, time_t trigger_duration,
+             uint64 trigger_interval, uint64 trigger_point, uint64 trigger_duration,
              const std::function<void()> &start_cb, const std::function<void()> &stop_cb,
              uint32 routine_type, bool is_strict, bool is_isolate, bool is_restore,
              uint32 repeats)
@@ -102,7 +102,7 @@ protected:
             WLOG("CreateTwinklerByMonthly is invalid.");
             return false;
         }
-        const time_t init_point_time = point_time();
+        const uint64 init_point_time = point_time();
         if (!Twinkler::OnPrepare()) {
             return false;
         }
@@ -173,7 +173,7 @@ void WheelTwinklerOwner::CreateTwinklerX(
 }
 
 void WheelTwinklerOwner::CreateTwinkler(
-    time_t trigger_interval, time_t trigger_point, time_t trigger_duration,
+    uint64 trigger_interval, uint64 trigger_point, uint64 trigger_duration,
     const std::function<void()> &start_cb, const std::function<void()> &stop_cb,
     uint32 routine_type, bool is_strict, bool is_isolate, bool is_restore, uint32 repeats)
 {
@@ -183,7 +183,7 @@ void WheelTwinklerOwner::CreateTwinkler(
 }
 
 void WheelTwinklerOwner::CreateTwinklerX(
-    time_t trigger_interval, time_t trigger_point, time_t trigger_duration,
+    uint64 trigger_interval, uint64 trigger_point, uint64 trigger_duration,
     const std::function<void()> &start_cb, const std::function<void()> &stop_cb,
     bool is_strict, bool is_isolate, bool is_restore, uint32 repeats)
 {

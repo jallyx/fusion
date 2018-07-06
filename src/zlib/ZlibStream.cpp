@@ -43,9 +43,9 @@ bool DeflateStream::Flush(void *out, size_t &outlen)
     stream_.avail_in = 0;
     stream_.next_out = (Bytef*)out;
     stream_.avail_out = outlen;
-    int ret = deflate(&stream_, Z_PARTIAL_FLUSH);
+    int ret = deflate(&stream_, Z_SYNC_FLUSH);
     if (ret != Z_OK) {
-        WLOG("deflate(Z_PARTIAL_FLUSH) Has Error %d.", ret);
+        WLOG("deflate(Z_SYNC_FLUSH) Has Error %d.", ret);
         return false;
     }
     outlen -= stream_.avail_out;

@@ -2,7 +2,6 @@
 #include <signal.h>
 #include <string.h>
 #include "CoreDumper.h"
-#include "Exception.h"
 #include "Logger.h"
 #include "OS.h"
 #include "ServerMaster.h"
@@ -97,7 +96,6 @@ void SignalHandler::FatalSignalHandler(int signum)
     sCoreDumper.ManualDump();
     ELOG("fatal signal captured, signum = %d.", signum);
     SignalException se(signum);
-    se.Print();
     std::ofstream &stream = sSignalHandler.GrabOutputStream();
     if (stream.is_open()) {
         se.WriteStream(stream);

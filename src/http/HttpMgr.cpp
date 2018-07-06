@@ -1,5 +1,5 @@
 #include "HttpMgr.h"
-#include <limits.h>
+#include "Macro.h"
 
 #if defined(_WIN32)
 int pipe(int pipefd[2])
@@ -44,12 +44,14 @@ clean:
 #define read_pipe(a,b,c) recv(a,b,c,0);
 #define close_pipe closesocket
 #else
+#include <unistd.h>
 #define write_pipe write
 #define read_pipe read
 #define close_pipe close
 #endif
 
 HttpMgr::HttpMgr()
+: multi_handle_(nullptr)
 {
     pipefd_[1] = pipefd_[0] = INVALID_SOCKET;
 }
@@ -60,8 +62,12 @@ HttpMgr::~HttpMgr()
 
 bool HttpMgr::Initialize()
 {
-    if (pipe(pipefd_) != 0)
+    if ((multi_handle_ = curl_multi_init()) == nullptr) {
         return false;
+    }
+    if (pipe(pipefd_) != 0) {
+        return false;
+    }
     return true;
 }
 
@@ -78,17 +84,26 @@ void HttpMgr::Abort()
 
 void HttpMgr::Finish()
 {
-    if (pipefd_[0] != INVALID_SOCKET)
+    if (multi_handle_ != nullptr) {
+        curl_multi_cleanup(multi_handle_);
+        multi_handle_ = nullptr;
+    }
+
+    if (pipefd_[0] != INVALID_SOCKET) {
         close_pipe(pipefd_[0]);
-    if (pipefd_[1] != INVALID_SOCKET)
+        pipefd_[0] = INVALID_SOCKET;
+    }
+    if (pipefd_[1] != INVALID_SOCKET) {
         close_pipe(pipefd_[1]);
-    pipefd_[1] = pipefd_[0] = INVALID_SOCKET;
+        pipefd_[1] = INVALID_SOCKET;
+    }
 }
 
-HttpClient *HttpMgr::AppendTask(ITaskObserver *observer, const char *url, const char *filepath)
+HttpClient *HttpMgr::AppendTask(ITaskObserver *observer, const char *filepath,
+        const char *url, const char *referer, const char *cookie)
 {
     HttpClient *client = new HttpClient;
-    client->SetResource(url, nullptr, nullptr);
+    client->SetResource(url, referer, cookie);
     client->SetStorage(filepath);
     AppendTask(observer, client);
     return client;
@@ -115,67 +130,63 @@ void HttpMgr::CheckClients()
 {
     std::pair<HttpClient*, ITaskObserver*> wrpair;
     while (waiting_room_.Dequeue(wrpair)) {
+        wrpair.first->Register(multi_handle_);
         client_list_.insert(wrpair.first);
-        if (wrpair.second != nullptr)
+        if (wrpair.second != nullptr) {
             observer_list_.insert(wrpair);
+        }
     }
 
     std::pair<HttpClient*, bool> rbpair;
     while (recycle_bin_.Dequeue(rbpair)) {
+        rbpair.first->Unregister(multi_handle_);
         client_list_.erase(rbpair.first);
         observer_list_.erase(rbpair.first);
-        if (rbpair.second)
+        if (rbpair.second) {
             delete rbpair.first;
+        }
     }
 }
 
 void HttpMgr::UpdateClients()
 {
-    std::vector<struct pollfd> pollfd_list;
-    pollfd_list.reserve(client_list_.size() + 1);
-    std::vector<HttpClient*> subject_list;
-    subject_list.reserve(client_list_.size());
-    struct pollfd spollfd;
-    for (auto client : client_list_) {
-        if (client->RegisterObserver(spollfd)) {
-            pollfd_list.push_back(spollfd);
-            subject_list.push_back(client);
-        }
-    }
-
-    spollfd.fd = pipefd_[0];
-    spollfd.events = POLLRDNORM;
-    pollfd_list.push_back(spollfd);
-
-    int timeout = subject_list.empty() ? INT_MAX : 1000;
-    int ret = poll(pollfd_list.data(), pollfd_list.size(), timeout);
-    if (ret == SOCKET_ERROR)
+    int running_handles = 0;
+    if (curl_multi_perform(multi_handle_, &running_handles) != CURLM_OK) {
         return;
-
-    if (ret > 0) {
-        char a[64];
-        struct pollfd &pipefd = pollfd_list.back();
-        if ((pipefd.revents & POLLRDNORM) != 0)
-            read_pipe(pipefd.fd, a, sizeof(a));
     }
 
-    const size_t subject_number = subject_list.size();
-    for (size_t index = 0; index < subject_number; ++index) {
-        HttpClient *client = subject_list[index];
-        client->CheckTimeout();
-        if (ret > 0) {
-            struct pollfd &sockfd = pollfd_list[index];
-            if ((sockfd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0)
-                client->HandleExceptable();
-            if ((sockfd.revents & POLLRDNORM) != 0)
-                client->HandleReadable();
-            if ((sockfd.revents & POLLWRNORM) != 0)
-                client->HandleWritable();
+    curl_waitfd pipefd;
+    pipefd.fd = pipefd_[0];
+    pipefd.events = CURL_WAIT_POLLIN;
+    int numfds = 0;
+    if (curl_multi_wait(multi_handle_, &pipefd, 1, 1000, &numfds) != CURLM_OK) {
+        return;
+    }
+
+    if (numfds > 0) {
+        char a[64];
+        if ((pipefd.revents & CURL_WAIT_POLLIN) != 0) {
+            read_pipe(pipefd.fd, a, sizeof(a));
         }
-        if (client->error() != HttpClient::ErrorNone) {
-            auto itr = observer_list_.find(client);
-            if (itr != observer_list_.end())
-                itr->second->UpdateTaskStatus(client, client->error());
+    }
+
+    while (true) {
+        int msgs_in_queue = 0;
+        CURLMsg *m = curl_multi_info_read(multi_handle_, &msgs_in_queue);
+        if (m != nullptr) {
+            if (m->msg == CURLMSG_DONE) {
+                HttpClient *client = nullptr;
+                CURLcode ret = curl_easy_getinfo(m->easy_handle, CURLINFO_PRIVATE, &client);
+                if (ret == CURLE_OK && client != nullptr) {
+                    client->Done(m->data.result);
+                    auto itr = observer_list_.find(client);
+                    if (itr != observer_list_.end()) {
+                        itr->second->UpdateTaskStatus(client, client->error());
+                    }
+                }
+            }
+        } else {
+            break;
         }
     }
 }

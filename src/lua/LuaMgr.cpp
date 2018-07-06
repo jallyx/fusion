@@ -11,6 +11,17 @@ LuaMgr::~LuaMgr()
 {
 }
 
+void LuaMgr::RemoveFile(const std::string &fileName)
+{
+    rwlock_.wrlock();
+    std::lock_guard<rwlock> lock(rwlock_, std::adopt_lock);
+    if (fileName.empty()) {
+        chunks_.clear();
+    } else {
+        chunks_.erase(fileName);
+    }
+}
+
 int LuaMgr::LoadFile(lua_State *L, const std::string &fileName)
 {
     int errcode = CacheFile(L, fileName);
@@ -57,7 +68,7 @@ int LuaMgr::CacheFile(lua_State *L, const std::string &fileName)
         }
     } while (0);
 
-    int errcode = !chunk.empty() && false ?
+    int errcode = !chunk.empty() ?
         luaL_loadbuffer(L, chunk.data(), chunk.size(), fileName.c_str()) :
         luaL_loadfile(L, fileName.c_str());
     if (errcode == 0) {
@@ -73,10 +84,11 @@ void LuaMgr::DumpChunk(lua_State *L, const std::string &fileName)
 {
     std::ostringstream stream;
     lua_dump(L, (lua_Writer)WriteChunk, &stream, 0);
+    std::string chunk = stream.str();
     do {
         rwlock_.wrlock();
         std::lock_guard<rwlock> lock(rwlock_, std::adopt_lock);
-        chunks_[fileName] = stream.str();
+        chunks_[fileName] = std::move(chunk);
     } while (0);
 }
 

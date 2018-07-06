@@ -1,3 +1,3 @@
-from table_source import *
+from table_cxx_generator import *
 
-to_cplusplus_source(r'..\..\..\base\protox', r'..\..\..\base\tablex')
+to_cxx_files('example', 'example1')

@@ -1,6 +1,5 @@
 #include "WheelTimerMgr.h"
 #include "WheelTimer.h"
-#include "Exception.h"
 #include "Logger.h"
 #include "Macro.h"
 
@@ -226,7 +225,7 @@ void WheelTimerMgr::Relocate(std::list<WheelTimer*> &&pending_timer_list)
             }
         }
         if (timer->mgr_ == nullptr) {
-            ELOG("Relocate wheel timer(%u,%u) error.", timer->active_tick_count_, tick_count_);
+            ELOG("Relocate wheel timer(%llu,%llu) error.", timer->active_tick_count_, tick_count_);
             pending_timer_list.pop_front();
             delete timer;
         }

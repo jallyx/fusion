@@ -22,11 +22,23 @@ public:
     MapTile *&anchor_tile() { return anchor_tile_; }
     TileActor *&anchor_actor() { return anchor_actor_; }
 
+    class AutoTraverseNumber {
+    public:
+        AutoTraverseNumber(const TileHandler *handler)
+        : handler_(handler) { ++handler_->traverse_number_; }
+        ~AutoTraverseNumber() { --handler_->traverse_number_; }
+    private:
+        const TileHandler *handler_;
+    };
+    size_t traverse_number() const { return traverse_number_; }
+
 private:
     const TileDefine &tile_define_;
     MapTile ***tiles_;
     MapTile *anchor_tile_;
     TileActor *anchor_actor_;
+
+    mutable size_t traverse_number_;
 
     const static size_t group_count_ = 3;
     int tick_count_;

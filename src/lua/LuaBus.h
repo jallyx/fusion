@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <lua.hpp>
 
 namespace lua {
@@ -321,15 +322,6 @@ struct user2lua {
     }
 };
 
-// string wrapper
-struct sstr {
-    sstr() : str(nullptr), len(0) {}
-    sstr(const char *s, size_t l) : str(s), len(l) {}
-    sstr(const std::string &s) : str(s.data()), len(s.size()) {}
-    const char *str;
-    size_t len;
-};
-
 // read a value from lua stack
 template<typename T>
 struct read {
@@ -409,10 +401,10 @@ struct read {
         const char *str = lua_tolstring(L, index, &len);
         return std::string(str, len);
     }while(0))
-    READ_VALUE_FROM_LUA_STACK(sstr, do{
-        sstr s;
-        s.str = lua_tolstring(L, index, &s.len);
-        return s;
+    READ_VALUE_FROM_LUA_STACK(std::string_view, do{
+        size_t len;
+        const char *str = lua_tolstring(L, index, &len);
+        return std::string_view(str, len);
     }while(0))
 #undef READ_VALUE_FROM_LUA_STACK
 
@@ -498,8 +490,8 @@ template<> struct push<std::nullptr_t> {
     PUSH_VALUE_TO_LUA_STACK(std::string, do{
         lua_pushlstring(L, val.data(), val.size());
     }while(0))
-    PUSH_VALUE_TO_LUA_STACK(sstr, do{
-        lua_pushlstring(L, val.str, val.len);
+    PUSH_VALUE_TO_LUA_STACK(std::string_view, do{
+        lua_pushlstring(L, val.data(), val.size());
     }while(0))
 #undef PUSH_VALUE_TO_LUA_STACK
 

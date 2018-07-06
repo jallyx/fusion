@@ -1,6 +1,5 @@
 #include "System.h"
 #include <tuple>
-#include <utility>
 
 time_t System::unix_time_;
 uint64 System::sys_time_;
@@ -54,11 +53,6 @@ static inline int PassWeekTime(const struct tm &tm) {
 }
 static inline int PassMonthTime(const struct tm &tm) {
     return (tm.tm_mday - 1) * 60*60*24 + PassDayTime(tm);
-}
-
-time_t System::GetMinuteUnixTime()
-{
-    return unix_time_ - date_time_.tm_sec;
 }
 
 time_t System::GetDayUnixTime()

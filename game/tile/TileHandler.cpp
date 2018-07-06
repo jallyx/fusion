@@ -6,6 +6,7 @@ TileHandler::TileHandler(const TileDefine &tile_define)
 , tiles_(nullptr)
 , anchor_tile_(nullptr)
 , anchor_actor_(nullptr)
+, traverse_number_(0)
 , tick_count_(0)
 {
 }

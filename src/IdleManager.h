@@ -23,11 +23,11 @@ private:
     void RunSession();
 
     ThreadSafePool<AsyncTaskOwner, 256> async_task_owner_pool_;
-    ThreadSafeQueue<AsyncTaskOwner*> async_task_owner_queue_;
+    MultiBufferQueue<AsyncTaskOwner*, 256> async_task_owner_queue_;
     std::unordered_set<AsyncTaskOwner*> async_task_owner_discarded_list_;
 
     ThreadSafePool<Session, 1024> session_pool_;
-    ThreadSafeQueue<Session*> session_queue_;
+    MultiBufferQueue<Session*, 1024> session_queue_;
     std::unordered_set<Session*> session_discarded_list_;
 
     fakelock fakelock_;

@@ -1,4 +1,5 @@
 #include "MysqlDatabase.h"
+#include "System.h"
 
 namespace {
 struct MySQLLoader {
@@ -19,8 +20,8 @@ MysqlDatabase::MysqlDatabase()
 
 MysqlDatabase::~MysqlDatabase()
 {
-    for (; !connections_.empty(); connections_.pop()) {
-        DeleteConnection(connections_.front());
+    for (; !connections_.empty(); connections_.pop_front()) {
+        DeleteConnection(connections_.front().first);
     }
 }
 
@@ -38,7 +39,7 @@ bool MysqlDatabase::Connect(const char *host, unsigned int port,
     for (unsigned int count = 0; count < connInit; ++count) {
         MysqlConnection *conn = NewConnection();
         if (conn != nullptr) {
-            connections_.push(conn);
+            connections_.push_front({conn, GET_UNIX_TIME});
         } else {
             break;
         }
@@ -53,8 +54,8 @@ MysqlConnection *MysqlDatabase::GetConnection()
     do {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!connections_.empty()) {
-            conn = connections_.front();
-            connections_.pop();
+            conn = connections_.front().first;
+            connections_.pop_front();
         }
     } while (0);
     if (conn == nullptr) {
@@ -65,15 +66,39 @@ MysqlConnection *MysqlDatabase::GetConnection()
 
 void MysqlDatabase::PutConnection(MysqlConnection *conn)
 {
-    do {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (connections_.size() < max_connnection_count_) {
-            connections_.push(conn);
-            conn = nullptr;
+    std::lock_guard<std::mutex> lock(mutex_);
+    connections_.push_front({conn, GET_UNIX_TIME});
+}
+
+void MysqlDatabase::CheckConnections()
+{
+    while (true) {
+        MysqlConnection *conn = nullptr;
+        bool isOverflow = false;
+        do {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!connections_.empty()) {
+                const time_t timeOut = (isOverflow =
+                    connections_.size() > max_connnection_count_) ? 60 : 360;
+                if (connections_.back().second + timeOut < GET_UNIX_TIME) {
+                    conn = connections_.back().first;
+                    connections_.pop_back();
+                }
+            }
+        } while (0);
+        if (conn != nullptr) {
+            if (isOverflow) {
+                DeleteConnection(conn);
+            } else {
+                if (conn->Ping() != 0) {
+                    DeleteConnection(conn);
+                } else {
+                    PutConnection(conn);
+                }
+            }
+        } else {
+            break;
         }
-    } while (0);
-    if (conn != nullptr) {
-        DeleteConnection(conn);
     }
 }
 
@@ -95,5 +120,5 @@ void MysqlDatabase::DeleteConnection(MysqlConnection *conn)
 
 std::unique_ptr<MysqlConnection, MysqlDatabase::ConnDeleter> MysqlDatabase::GetConnAutoPtr()
 {
-    return{ GetConnection(), {this} };
+    return {GetConnection(), {this}};
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+#include <functional>
 #include "InlineFuncs.h"
 #include "ThreadSafePool.h"
 
@@ -18,8 +20,9 @@ class MultiBufferQueue
     };
 
 public:
-    MultiBufferQueue() : head_(AllocQueue()) {
-        tail_ = head_;
+    MultiBufferQueue() {
+        std::call_once(s_queue_flag_, AutoQueuePool);
+        tail_ = head_ = AllocQueue();
     }
     ~MultiBufferQueue() {
         do {
@@ -85,6 +88,11 @@ public:
     }
 
 private:
+    static void AutoQueuePool() {
+        InitQueuePool();
+        std::atexit(ClearQueuePool);
+    }
+
     static DataQueue *AllocQueue() {
         DataQueue *queue = nullptr;
         if ((queue = s_queue_pool_.Get()) != nullptr) {
@@ -99,10 +107,13 @@ private:
         }
     }
 
+    static std::once_flag s_queue_flag_;
     static ThreadSafePool<DataQueue, S_MAX_BUFFER_QUEUE_POOL_COUNT>
         s_queue_pool_;
 };
 
+template <typename T, size_t N>
+std::once_flag MultiBufferQueue<T, N>::s_queue_flag_;
 template <typename T, size_t N>
 ThreadSafePool<
     typename MultiBufferQueue<T, N>::DataQueue,

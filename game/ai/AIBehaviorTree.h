@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include "noncopyable.h"
 #include "lua/LuaRef.h"
 
 class AINodeBase;

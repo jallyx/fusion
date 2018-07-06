@@ -54,6 +54,7 @@ InrangeIterator::InrangeIterator(const TileHandler *handler, float x, float z, f
 
 bool InrangeIterator::ForeachActor(const std::function<bool(TileActor*)> &func) const
 {
+    const TileHandler::AutoTraverseNumber autoTraverseNumber(handler_);
     const TileDefine &tile_define = handler_->tile_define();
     const size_t tile_x = tile_define.CoordsToTileX(x_);
     const size_t tile_z = tile_define.CoordsToTileZ(z_);

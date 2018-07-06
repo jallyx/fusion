@@ -1,6 +1,6 @@
 #include "Logger.h"
+#include <stdarg.h>
 #include <string.h>
-#include "Macro.h"
 #include "System.h"
 
 enum LogType {
@@ -44,7 +44,7 @@ Logger::~Logger()
     }
 }
 
-void Logger::Log(const char *file, const char *func, int line, char type, const char *fmt, ...)
+void Logger::Log(const LogInfo &info, char type, const char *fmt, ...)
 {
     char strtime[(4+1+2+1+2 + 1 + 2+1+2+1+2) + 1];
     const struct tm tm = GET_DATE_TIME;
@@ -57,16 +57,17 @@ void Logger::Log(const char *file, const char *func, int line, char type, const 
     va_end(args);
 
     char strpos[512];
-    if (type == 'E') {
-        const char *filename = strrchr(file, os::sep) + 1;
-        snprintf(strpos, sizeof(strpos), " (FILE:%s FUNC:%s LINE:%d)", filename, func, line);
+    if (info.file != nullptr) {
+        const char *filename = strrchr(info.file, os::sep) + 1;
+        snprintf(strpos, sizeof(strpos), " (FILE:%s FUNC:%s LINE:%d)", filename, info.func, info.line);
     } else {
         strpos[0] = '\0';
     }
 
     std::string *s = AllocString();
-    (*s).reserve(1+1+strlen(strtime)+1+strlen(strlog)+strlen(strpos));
+    (*s).reserve(1+1+strlen(strtime)+1+strlen(strlog)+strlen(strpos)+info.s.size());
     (*s).append(1,type).append(1,'|').append(strtime).append(1,'|').append(strlog).append(strpos);
+    if (!info.s.empty()) { (*s).append(1, '\n').append(info.s.c_str(), info.s.size() - 1); }
 
     log_queue_.Enqueue(s);
 }

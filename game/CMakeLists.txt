@@ -1,4 +1,4 @@
-include_directories(. ../external ../src ../thirdparty/lua)
+include_directories(. ../src ../external ../feature ../thirdparty/lua)
 aux_source_directory(ai AI_LIST)
 aux_source_directory(aoi AOI_LIST)
 aux_source_directory(tile TILE_LIST)

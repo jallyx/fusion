@@ -3,7 +3,6 @@
 #include "Macro.h"
 #include "InlineFuncs.h"
 #include <assert.h>
-#include <algorithm>
 
 AoiActor::AoiActor(Type type, int flags)
 : type_(type)

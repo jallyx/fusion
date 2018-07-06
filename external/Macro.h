@@ -41,6 +41,10 @@ namespace os {
 #endif
 }
 
+#define JOIN(X,Y) __DO_JOIN__(X,Y)
+#define __DO_JOIN__(X,Y) __DO_JOIN2__(X,Y)
+#define __DO_JOIN2__(X,Y) X##Y
+
 #define MAX(a,b) ((a)>(b)?(a):(b))
 #define MIN(a,b) ((a)<(b)?(a):(b))
 
@@ -51,11 +55,30 @@ namespace os {
 #define COUNT_OF_1(a) (sizeof(a)/sizeof(a[0]))
 #define COUNT_OF_2(a) (sizeof(a)/sizeof(a[0][0]))
 #define COUNT_OF_3(a) (sizeof(a)/sizeof(a[0][0][0]))
-#define ARRAY_SIZE(a) (std::extent<typename std::remove_reference<decltype(a)>::type>::value)
 
+#include <type_traits>
+#define ARRAY_SIZE(a) \
+    (std::extent<typename std::remove_reference<decltype(a)>::type>::value)
+
+#include <algorithm>
 #define IS_INPTR_CONTAIN_VALUE(Array,Size,Value) \
     (std::find(Array,Array+Size,Value)!=Array+Size)
 #define IS_ARRAY_CONTAIN_VALUE(Array,Value) \
     IS_INPTR_CONTAIN_VALUE(Array,ARRAY_SIZE(Array),Value)
 #define IS_VECTOR_CONTAIN_VALUE(Vector,Value) \
     IS_INPTR_CONTAIN_VALUE(Vector.data(),Vector.size(),Value)
+
+#include <utility>
+#define defer(directives) \
+    auto JOIN(__lambda__, __LINE__) = [=](){ directives; }; \
+    __DEFER__<decltype(JOIN(__lambda__, __LINE__))> \
+        JOIN(__defer__, __LINE__)(std::move(JOIN(__lambda__, __LINE__)));
+#define defer_r(directives) \
+    auto JOIN(__lambda__, __LINE__) = [&](){ directives; }; \
+    __DEFER__<decltype(JOIN(__lambda__, __LINE__))> \
+        JOIN(__defer__, __LINE__)(std::move(JOIN(__lambda__, __LINE__)));
+template <class F> struct __DEFER__ {
+    __DEFER__(F &&f) : f_(std::move(f)) {}
+    ~__DEFER__() { f_(); }
+    const F f_;
+};

@@ -1,9 +1,20 @@
 #include "AoiHandler.h"
 #include "AoiActor.h"
-#include <assert.h>
+#include "Debugger.h"
 #include <algorithm>
 
+class AoiHandler::AutoStableStatus {
+public:
+    AutoStableStatus(const AoiHandler *handler, AoiHandler::StableStatus status)
+    : handler_(handler) { handler_->stable_status_ = status; }
+    ~AutoStableStatus()
+    { handler_->stable_status_ = AoiHandler::SS_None; }
+private:
+    const AoiHandler *handler_;
+};
+
 AoiHandler::AoiHandler()
+: stable_status_(SS_None)
 {
 }
 
@@ -97,6 +108,9 @@ void AoiHandler::AddActor(AoiActor *actor)
             itrs[End] = itrs[Center] = itrs[Begin];
         }
     };
+
+    DBGASSERT(stable_status_ == SS_None);
+    AutoStableStatus autoStableStatus(this, SS_Write);
 
     Iterator &itrs = rst.first->second;
     AddActorLinkNode(AoiActor::X, x_link_, itrs.xitr);
@@ -232,6 +246,9 @@ void AoiHandler::MoveActor(AoiActor *actor)
         }
     };
 
+    DBGASSERT(stable_status_ == SS_None);
+    AutoStableStatus autoStableStatus(this, SS_Write);
+
     Iterator &itrs = itr->second;
     MoveActorLinkNode(AoiActor::X, x_link_, itrs.xitr);
     MoveActorLinkNode(AoiActor::Z, z_link_, itrs.zitr);
@@ -253,6 +270,9 @@ void AoiHandler::RemoveActor(AoiActor *actor)
         }
         link.erase(itrs[Center]);
     };
+
+    DBGASSERT(stable_status_ == SS_None);
+    AutoStableStatus autoStableStatus(this, SS_Write);
 
     Iterator &itrs = itr->second;
     RemoveActorLinkNode(x_link_, itrs.xitr);
@@ -333,9 +353,15 @@ void AoiHandler::ReloadActorRadius(AoiActor *actor)
         }
     };
 
-    Iterator &itrs = itr->second;
-    Relocate(AoiActor::X, x_link_, itrs.xitr);
-    Relocate(AoiActor::Z, z_link_, itrs.zitr);
+    do {
+        DBGASSERT(stable_status_ == SS_None);
+        AutoStableStatus autoStableStatus(this, SS_Write);
+
+        Iterator &itrs = itr->second;
+        Relocate(AoiActor::X, x_link_, itrs.xitr);
+        Relocate(AoiActor::Z, z_link_, itrs.zitr);
+    } while (0);
+
     ReloadActorSubject(actor);
 }
 
@@ -359,6 +385,9 @@ void AoiHandler::ReloadActorObserver(AoiActor *actor) const
         });
     };
 
+    DBGASSERT(stable_status_ == SS_None || stable_status_ == SS_Read);
+    const AutoStableStatus autoStableStatus(this, SS_Read);
+
     const Iterator &itrs = itr->second;
     actor->CleanObserver();
     Reload(x_link_, itrs.xitr);
@@ -381,6 +410,9 @@ void AoiHandler::ReloadActorSubject(AoiActor *actor) const
         });
     };
 
+    DBGASSERT(stable_status_ == SS_None || stable_status_ == SS_Read);
+    const AutoStableStatus autoStableStatus(this, SS_Read);
+
     const Iterator &itrs = itr->second;
     actor->CleanSubject();
     Reload(itrs.xitr);
@@ -401,6 +433,9 @@ void AoiHandler::ReloadAllActorSubject() const
 
 void AoiHandler::CollateAllActorMarker() const
 {
+    DBGASSERT(stable_status_ == SS_None || stable_status_ == SS_Read);
+    const AutoStableStatus autoStableStatus(this, SS_Read);
+
     for (auto &pair : itrs_) {
         pair.first->CollateMarker();
     }

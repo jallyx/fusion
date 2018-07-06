@@ -26,6 +26,8 @@ public:
     std::pair<my_ulonglong, bool> Execute(const char *sql) const;
     std::pair<my_ulonglong, bool> ExecuteFormat(const char *fmt, ...) const;
 
+    int Ping() const;
+
     my_ulonglong GetInsertID() const;
     unsigned int GetLastErrno() const;
     const char *GetLastError() const;

@@ -2,7 +2,6 @@
 #include "network/SessionManager.h"
 #include "network/Listener.h"
 #include "ServerMaster.h"
-#include "Debugger.h"
 #include "System.h"
 #include "OS.h"
 
@@ -11,16 +10,9 @@
 #define sEchoServer (*EchoServer::instance())
 #define sEchoListener (*EchoListener::instance())
 #define sEchoServerMaster (*EchoServerMaster::instance())
-#define sEchoConnectionManager (*EchoConnectionManager::instance())
-#define sEchoSessionManager (*EchoSessionManager::instance())
 #define sDataManager (*DataManager::instance())
 
 class ProducerSession;
-
-class EchoConnectionManager : public ConnectionManager, public Singleton<EchoConnectionManager> {
-};
-class EchoSessionManager : public SessionManager, public Singleton<EchoSessionManager> {
-};
 
 class DataManager : public Singleton<DataManager> {
 public:
@@ -37,7 +29,7 @@ public:
 
 class ProducerSession : public Session {
 public:
-    ProducerSession() : Session(true, true, true) {}
+    ProducerSession() {}
     virtual ~ProducerSession() {
         for (; !queue_.empty(); queue_.pop()) {
             delete queue_.front();
@@ -71,23 +63,25 @@ public:
     }
     static void New() {
         ProducerSession *session = new ProducerSession;
-        session->SetConnection(sEchoConnectionManager.NewConnection(*session));
+        session->SetConnection(sConnectionManager.NewConnection(*session));
+        session->GetConnection()->AddDataPipe(new SendDataLz4Pipe, new RecvDataLz4Pipe);
         session->GetConnection()->AsyncConnect(HOST_STRING, PORT_STRING);
-        sEchoSessionManager.AddSession(session);
+        sSessionManager.AddSession(session);
         sDataManager.producer_list_.insert(session);
     }
 private:
     virtual void OnShutdownSession() {
         sDataManager.producer_list_.erase(this);
-        if (!IServerMaster::GetInstance().IsEnd())
+        if (!IServerMaster::GetInstance().IsEnd()) {
             New();
+        }
     }
     std::queue<INetPacket*> queue_;
 };
 
 class EchoSession : public Session {
 public:
-    EchoSession() : Session(true, true, true) {}
+    EchoSession() {}
     virtual int HandlePacket(INetPacket *pck) {
         PushSendPacket(*pck);
         sDataManager.trans_pck_count_.fetch_add(1);
@@ -97,11 +91,12 @@ public:
 
 class EchoListener : public Listener, public Singleton<EchoListener> {
 public:
-    virtual ConnectionManager *GetConnectionManager() { return &sEchoConnectionManager; }
-    virtual SessionManager *GetSessionManager() { return &sEchoSessionManager; }
     virtual std::string GetBindAddress() { return HOST_STRING; }
     virtual std::string GetBindPort() { return PORT_STRING; }
     virtual Session *NewSessionObject() { return new EchoSession(); }
+    virtual void AddDataPipes(Session *session) {
+        session->GetConnection()->AddDataPipe(new SendDataLz4Pipe, new RecvDataLz4Pipe);
+    }
 };
 
 class EchoServer : public Thread, public Singleton<EchoServer> {
@@ -121,7 +116,7 @@ public:
                 session->SendSomePacket();
             }
         }
-        sEchoSessionManager.Update();
+        sSessionManager.Update();
         printf("[%d] --- %d <---> %d\r", sDataManager.trans_pck_count_.load(),
             sDataManager.send_pck_count_.load(), sDataManager.recv_pck_count_.load());
         System::Update();
@@ -135,13 +130,9 @@ public:
         DataManager::newInstance();
         EchoServer::newInstance();
         EchoListener::newInstance();
-        EchoConnectionManager::newInstance();
-        EchoSessionManager::newInstance();
         return true;
     }
     virtual void FinishSingleton() {
-        EchoSessionManager::deleteInstance();
-        EchoConnectionManager::deleteInstance();
         EchoListener::deleteInstance();
         EchoServer::deleteInstance();
         DataManager::deleteInstance();
@@ -150,20 +141,19 @@ protected:
     virtual bool InitDBPool() { return true; }
     virtual bool LoadDBData() { return true; }
     virtual bool StartServices() {
-        sEchoConnectionManager.SetWorkerCount(3);
-        sEchoConnectionManager.Start();
-        sEchoListener.Start();
         sEchoServer.Start();
+        sEchoListener.Start();
         return true;
     }
     virtual void StopServices() {
-        sEchoSessionManager.Stop();
-        sEchoConnectionManager.Stop();
         sEchoListener.Stop();
         sEchoServer.Stop();
+        sSessionManager.Stop();
     }
     virtual void Tick() {}
     virtual std::string GetConfigFile() { return "config"; }
+    virtual size_t GetAsyncServiceCount() { return 0; }
+    virtual size_t GetIOServiceCount() { return 3; }
 };
 
 void EchoMain(int argc, char **argv)

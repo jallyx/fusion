@@ -2,7 +2,7 @@
 #include "network/SessionManager.h"
 #include "network/Listener.h"
 #include "ServerMaster.h"
-#include "Debugger.h"
+#include "ThreadPool.h"
 #include "System.h"
 #include "OS.h"
 
@@ -11,16 +11,9 @@
 #define sParallelServer (*ParallelServer::instance())
 #define sParallelListener (*ParallelListener::instance())
 #define sParallelServerMaster (*ParallelServerMaster::instance())
-#define sParallelConnectionManager (*ParallelConnectionManager::instance())
-#define sParallelSessionManager (*ParallelSessionManager::instance())
 #define sParallelWorkerManager (*ParallelWorkerManager::instance())
 #define sDataManager (*DataManager::instance())
 #define sProducerSession (*ProducerSession::instance())
-
-class ParallelConnectionManager : public ConnectionManager, public Singleton<ParallelConnectionManager> {
-};
-class ParallelSessionManager : public SessionManager, public Singleton<ParallelSessionManager> {
-};
 
 class DataManager : public Singleton<DataManager> {
 public:
@@ -73,7 +66,7 @@ public:
 
 class ProducerSession : public Session, public Singleton<ProducerSession> {
 public:
-    ProducerSession() : Session(true, true, true) {}
+    ProducerSession() {}
     virtual int HandlePacket(INetPacket *pck) {
         return SessionHandleSuccess;
     }
@@ -95,7 +88,7 @@ public:
 
 class ConsumerSession : public Session {
 public:
-    ConsumerSession() : Session(true, true, true) {}
+    ConsumerSession() {}
     virtual int HandlePacket(INetPacket *pck) {
         sDataManager.HandlePacket(*pck);
         sDataManager.recv_pck_count_.fetch_add(1);
@@ -123,23 +116,25 @@ public:
 
 class ParallelListener : public Listener, public Singleton<ParallelListener> {
 public:
-    virtual ConnectionManager *GetConnectionManager() { return &sParallelConnectionManager; }
-    virtual SessionManager *GetSessionManager() { return &sParallelSessionManager; }
     virtual std::string GetBindAddress() { return HOST_STRING; }
     virtual std::string GetBindPort() { return PORT_STRING; }
     virtual Session *NewSessionObject() { return new ConsumerSession(); }
+    virtual void AddDataPipes(Session *session) {
+        session->GetConnection()->AddDataPipe(new SendDataLz4Pipe, new RecvDataLz4Pipe);
+    }
 };
 
 class ParallelServer : public Thread, public Singleton<ParallelServer> {
 public:
     virtual bool Initialize() {
-        sProducerSession.SetConnection(sParallelConnectionManager.NewConnection(sProducerSession));
+        sProducerSession.SetConnection(sConnectionManager.NewConnection(sProducerSession));
+        sProducerSession.GetConnection()->AddDataPipe(new SendDataLz4Pipe, new RecvDataLz4Pipe);
         sProducerSession.GetConnection()->AsyncConnect(HOST_STRING, PORT_STRING);
-        sParallelSessionManager.AddSession(&sProducerSession);
+        sSessionManager.AddSession(&sProducerSession);
         return true;
     }
     virtual void Kernel() {
-        sParallelSessionManager.Update();
+        sSessionManager.Update();
         printf("%d --> %d\r", sDataManager.send_pck_count_.load(),
             sDataManager.recv_pck_count_.load());
         System::Update();
@@ -154,15 +149,11 @@ public:
         DataManager::newInstance();
         ParallelServer::newInstance();
         ParallelListener::newInstance();
-        ParallelConnectionManager::newInstance();
-        ParallelSessionManager::newInstance();
         ParallelWorkerManager::newInstance();
         return true;
     }
     virtual void FinishSingleton() {
         ParallelWorkerManager::deleteInstance();
-        ParallelSessionManager::deleteInstance();
-        ParallelConnectionManager::deleteInstance();
         ParallelListener::deleteInstance();
         ParallelServer::deleteInstance();
         DataManager::deleteInstance();
@@ -172,22 +163,21 @@ protected:
     virtual bool InitDBPool() { return true; }
     virtual bool LoadDBData() { return true; }
     virtual bool StartServices() {
-        sParallelConnectionManager.SetWorkerCount(3);
-        sParallelConnectionManager.Start();
-        sParallelWorkerManager.Start();
-        sParallelListener.Start();
         sParallelServer.Start();
+        sParallelListener.Start();
+        sParallelWorkerManager.Start();
         return true;
     }
     virtual void StopServices() {
         sParallelWorkerManager.Stop();
-        sParallelSessionManager.Stop();
-        sParallelConnectionManager.Stop();
         sParallelListener.Stop();
         sParallelServer.Stop();
+        sSessionManager.Stop();
     }
     virtual void Tick() {}
     virtual std::string GetConfigFile() { return "config"; }
+    virtual size_t GetAsyncServiceCount() { return 0; }
+    virtual size_t GetIOServiceCount() { return 3; }
 };
 
 void ParallelMain(int argc, char **argv)

@@ -22,13 +22,13 @@ public:
         const std::function<void()> &stop_cb, bool is_isolate = false,
         bool is_restore = false, uint32 repeats = 0);
 
-    void CreateTwinkler(time_t trigger_interval, time_t trigger_point,
-        time_t trigger_duration, const std::function<void()> &start_cb,
+    void CreateTwinkler(uint64 trigger_interval, uint64 trigger_point,
+        uint64 trigger_duration, const std::function<void()> &start_cb,
         const std::function<void()> &stop_cb, uint32 routine_type,
         bool is_strict = true, bool is_isolate = false,
         bool is_restore = false, uint32 repeats = 0);
-    void CreateTwinklerX(time_t trigger_interval, time_t trigger_point,
-        time_t trigger_duration, const std::function<void()> &start_cb,
+    void CreateTwinklerX(uint64 trigger_interval, uint64 trigger_point,
+        uint64 trigger_duration, const std::function<void()> &start_cb,
         const std::function<void()> &stop_cb, bool is_strict = true,
         bool is_isolate = false, bool is_restore = false,
         uint32 repeats = 0);

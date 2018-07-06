@@ -1,8 +1,8 @@
 #pragma once
 
+#include <deque>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include "MysqlConnection.h"
 
 class MysqlDatabase : public noncopyable
@@ -30,6 +30,8 @@ public:
     MysqlConnection *GetConnection();
     void PutConnection(MysqlConnection *conn);
 
+    void CheckConnections();
+
 private:
     MysqlConnection *NewConnection() const;
     static void DeleteConnection(MysqlConnection *conn);
@@ -38,6 +40,6 @@ private:
     unsigned int port_;
 
     std::mutex mutex_;
-    std::queue<MysqlConnection*> connections_;
+    std::deque<std::pair<MysqlConnection*, time_t>> connections_;
     unsigned int max_connnection_count_;
 };

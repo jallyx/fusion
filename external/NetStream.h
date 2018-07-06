@@ -4,6 +4,7 @@
 #include <string.h>
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include "Base.h"
 #include "Exception.h"
 #include "noncopyable.h"
@@ -44,6 +45,13 @@ public:
         return std::string(buffer_ + rpos_, wpos_ - rpos_);
     }
 
+    std::string_view CastBufferStringView() const {
+        return std::string_view(buffer_, wpos_);
+    }
+    std::string_view CastReadableStringView() const {
+        return std::string_view(buffer_ + rpos_, wpos_ - rpos_);
+    }
+
     void Clear() {
         rpos_ = wpos_ = 0;
     }
@@ -65,6 +73,10 @@ public:
     }
     INetStream &Take(void *data, size_t size) {
         if (size != 0) ReadStream(data, size);
+        return *this;
+    }
+    INetStream &Take(const void *&data, size_t size) {
+        if (size != 0) data = SkipStream(size);
         return *this;
     }
 
@@ -111,6 +123,17 @@ public:
         return *this;
     }
 
+    INetStream &operator<<(const std::string_view &s) {
+        Write<uint16>((uint16)s.size());
+        if (!s.empty()) WriteStream(s.data(), s.size());
+        return *this;
+    }
+    INetStream &operator>>(std::string_view &s) {
+        size_t size = Read<uint16>();
+        s = {size != 0 ? SkipStream(size) : nullptr, size};
+        return *this;
+    }
+
     INetStream &operator<<(const char *s) {
         size_t size = strlen(s); Write<uint16>((uint16)size);
         if (size != 0) WriteStream(s, size);
@@ -120,6 +143,10 @@ public:
     void WriteString(const void *data, size_t size) {
         Write<uint16>((uint16)size);
         if (size != 0) WriteStream(data, size);
+    }
+    void ReadString(const void *&data, size_t &size) {
+        size = Read<uint16>();
+        if (size != 0) data = SkipStream(size);
     }
 
     template <typename T> void Write(T v) {
@@ -183,9 +210,11 @@ private:
         wpos_ += size;
     }
     void ReadStream(void *data, size_t size) {
-        if (rpos_ + size <= wpos_) {
-            memcpy(data, buffer_ + rpos_, size);
-            rpos_ += size;
+        memcpy(data, SkipStream(size), size);
+    }
+    const char *SkipStream(size_t size) {
+        if ((rpos_ += size) <= wpos_) {
+            return buffer_ + rpos_ - size;
         } else {
             THROW_EXCEPTION(NetStreamException());
         }

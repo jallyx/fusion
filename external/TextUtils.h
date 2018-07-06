@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ostream>
+#include <string>
 #include "Base.h"
 
 void WriteTEXT(std::ostream &stream, const char *text);

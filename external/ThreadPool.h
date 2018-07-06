@@ -3,7 +3,6 @@
 #include <functional>
 #include <vector>
 #include "Thread.h"
-#include "noncopyable.h"
 
 class ThreadPool : public noncopyable
 {

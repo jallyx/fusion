@@ -13,7 +13,7 @@ WheelTwinkler::WheelTwinkler(
 }
 
 WheelTwinkler::WheelTwinkler(
-    time_t trigger_interval, time_t trigger_point, time_t trigger_duration,
+    uint64 trigger_interval, uint64 trigger_point, uint64 trigger_duration,
     bool is_strict, bool is_isolate, bool is_restore, uint32 loop_count)
 : WheelTrigger(trigger_interval, trigger_point, loop_count)
 , trigger_duration_(trigger_duration)
@@ -30,7 +30,7 @@ WheelTwinkler::~WheelTwinkler()
 
 bool WheelTwinkler::OnPrepare()
 {
-    const time_t actual_tick_time = GetActualTickTime();
+    const uint64 actual_tick_time = GetActualTickTime();
     if (is_strict_) {
         while (true) {
             is_start_ = actual_tick_time > point_time();
@@ -58,7 +58,7 @@ bool WheelTwinkler::OnPrepare()
 void WheelTwinkler::OnActivate()
 {
     bool do_start = false, do_stop = false;
-    const time_t current_tick_time = GetCurrentTickTime();
+    const uint64 current_tick_time = GetCurrentTickTime();
     if (!is_start_ && current_tick_time >= point_time()) {
         do_start = is_start_ = true;
     }

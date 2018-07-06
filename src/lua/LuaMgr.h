@@ -11,6 +11,8 @@ public:
     LuaMgr();
     virtual ~LuaMgr();
 
+    void RemoveFile(const std::string &fileName);
+
     int LoadFile(lua_State *L, const std::string &fileName);
 
     bool DoFile(lua_State *L, const std::string &fileName);

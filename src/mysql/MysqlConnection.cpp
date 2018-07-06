@@ -1,4 +1,5 @@
 #include "MysqlConnection.h"
+#include <stdarg.h>
 #include "Logger.h"
 
 #define FormatSql(sql,fmt) \
@@ -56,6 +57,7 @@ bool MysqlConnection::Connect(const char *host, unsigned int port,
 void MysqlConnection::Close()
 {
     if (mysql_ != nullptr) {
+        NLOG("Close from `%s`, database `%s`.", mysql_->host, mysql_->db);
         mysql_close(mysql_);
         mysql_ = nullptr;
     }
@@ -110,6 +112,11 @@ std::pair<my_ulonglong, bool> MysqlConnection::ExecuteFormat(const char *fmt, ..
     std::string sql;
     FormatSql(sql, fmt);
     return Execute(sql.c_str());
+}
+
+int MysqlConnection::Ping() const
+{
+    return mysql_ping(mysql_);
 }
 
 my_ulonglong MysqlConnection::GetInsertID() const

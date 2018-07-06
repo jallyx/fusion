@@ -8,8 +8,8 @@ public:
     WheelTwinkler(TriggerCycle trigger_cycle,
         TriggerPoint trigger_point, time_t trigger_duration,
         bool is_isolate = false, bool is_restore = false, uint32 loop_count = 0);
-    WheelTwinkler(time_t trigger_interval,
-        time_t trigger_point, time_t trigger_duration, bool is_strict = true,
+    WheelTwinkler(uint64 trigger_interval,
+        uint64 trigger_point, uint64 trigger_duration, bool is_strict = true,
         bool is_isolate = false, bool is_restore = false, uint32 loop_count = 0);
 
 protected:
@@ -20,14 +20,14 @@ protected:
     virtual void OnStartActive() {}
     virtual void OnStopActive() {}
 
-    time_t trigger_duration() const { return trigger_duration_; }
+    uint64 trigger_duration() const { return trigger_duration_; }
 
 private:
-    time_t GetNextActivateTime() const {
+    uint64 GetNextActivateTime() const {
         return !is_start_ ? point_time() : point_time() + trigger_duration();
     }
 
-    const time_t trigger_duration_;
+    const uint64 trigger_duration_;
     const bool is_strict_;
     const bool is_isolate_;
     const bool is_restore_;

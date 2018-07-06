@@ -12,7 +12,7 @@ IOServiceManager::~IOServiceManager()
 
 bool IOServiceManager::Prepare()
 {
-    for (size_t i = 0; i < worker_count_ || i < 1; ++i) {
+    for (size_t i = 0; i < worker_count_; ++i) {
         worker_load_.push_back(new std::atomic_int());
         io_service_.push_back(new boost::asio::io_service());
         io_work_.push_back(new boost::asio::io_service::work(*io_service_[i]));

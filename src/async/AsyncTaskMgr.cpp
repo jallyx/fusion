@@ -1,6 +1,9 @@
 #include "AsyncTaskMgr.h"
 #include "AsyncWorkingThread.h"
 
+#define GetAsyncWorkingThread(i) \
+    reinterpret_cast<AsyncWorkingThread*>(GetThreadInstance(i))
+
 std::weak_ptr<AsyncTaskOwner> AsyncTaskMgr::null_owner_;
 
 AsyncTaskMgr::AsyncTaskMgr()
@@ -14,9 +17,8 @@ AsyncTaskMgr::~AsyncTaskMgr()
 
 bool AsyncTaskMgr::Prepare()
 {
-    PushThread(new AsyncWorkingThread(heavy_tasks_));
-    for (size_t i = 1; i < worker_count_ || i < 2; ++i) {
-        PushThread(new AsyncWorkingThread(tasks_));
+    for (size_t i = 0; i < worker_count_; ++i) {
+        PushThread(new AsyncWorkingThread(shared_tasks_));
     }
     return true;
 }
@@ -24,51 +26,64 @@ bool AsyncTaskMgr::Prepare()
 void AsyncTaskMgr::Finish()
 {
     std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair;
-    while (tasks_.Dequeue(pair)) {
-        delete pair.first;
-    }
-    while (heavy_tasks_.Dequeue(pair)) {
+    while (shared_tasks_.Dequeue(pair)) {
         delete pair.first;
     }
 }
 
 bool AsyncTaskMgr::HasTask() const
 {
-    return !tasks_.IsEmpty() || !heavy_tasks_.IsEmpty();
+    if (!shared_tasks_.IsEmpty()) return true;
+    for (size_t i = 0, n = GetThreadNumber(); i < n; ++i) {
+        if (GetAsyncWorkingThread(i)->HasTask()) {
+            return true;
+        }
+    }
+    return false;
 }
 
-bool AsyncTaskMgr::WaitTask(const void *queue)
+void AsyncTaskMgr::AddTask(AsyncTask *task, AsyncTaskOwner *owner, ssize_t group)
 {
-    std::cv_status status;
-    const std::chrono::milliseconds duration(100);
-    if (&tasks_ == queue) {
-        status = cv_.wait_for(fakelock_, duration);
-    } else if (&heavy_tasks_ == queue) {
-        status = heavy_cv_.wait_for(heavy_fakelock_, duration);
+    auto pair = BindAsyncTaskOwner(task, owner);
+    const size_t n = GetThreadNumber();
+    if (n == 0) {
+        shared_tasks_.Enqueue(pair);
+    } else if (group == -1) {
+        shared_tasks_.Enqueue(pair);
+        WakeIdleAsyncWorkingThread();
     } else {
-        assert(false && "can't reached here.");
+        const size_t i = n >= 2 ? group % (n - 1) + 1 : 0;
+        GetAsyncWorkingThread(i)->AddTask(pair);
     }
-    return status == std::cv_status::no_timeout;
 }
 
-void AsyncTaskMgr::AddTask(AsyncTask *task, AsyncTaskOwner *owner)
+void AsyncTaskMgr::WakeIdleAsyncWorkingThread()
 {
-    std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair(task, null_owner_);
-    if (owner != nullptr) {
-        owner->AddSubject(task);
-        pair.second = owner->linked_from_this();
+    for (size_t i = 0, n = GetThreadNumber(); i < n; ++i) {
+        if (GetAsyncWorkingThread(i)->WakeIdle()) {
+            break;
+        }
     }
-    tasks_.Enqueue(pair);
-    cv_.notify_one();
 }
 
 void AsyncTaskMgr::AddHeavyTask(AsyncTask *task, AsyncTaskOwner *owner)
 {
+    auto pair = BindAsyncTaskOwner(task, owner);
+    const size_t n = GetThreadNumber();
+    if (n == 0) {
+        shared_tasks_.Enqueue(pair);
+    } else {
+        GetAsyncWorkingThread(0)->AddTask(pair);
+    }
+}
+
+auto AsyncTaskMgr::BindAsyncTaskOwner(AsyncTask *task, AsyncTaskOwner *owner) ->
+    std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>
+{
     std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair(task, null_owner_);
     if (owner != nullptr) {
         owner->AddSubject(task);
         pair.second = owner->linked_from_this();
     }
-    heavy_tasks_.Enqueue(pair);
-    heavy_cv_.notify_one();
+    return pair;
 }

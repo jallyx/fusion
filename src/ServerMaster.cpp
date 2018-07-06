@@ -2,7 +2,6 @@
 #include "network/IOServiceManager.h"
 #include "network/SessionManager.h"
 #include "network/ConnectionManager.h"
-#include "udp/ConnectlessManager.h"
 #include "async/AsyncTaskMgr.h"
 #include "Logger.h"
 #include "OS.h"
@@ -21,9 +20,7 @@ IServerMaster::IServerMaster()
     System::Init();
     System::Update();
 
-    Session::InitPacketQueuePool();
     Connection::InitSendBufferPool();
-    Connectless::InitQueueBufferPool();
     INetPacket::InitNetPacketPool();
     CoreDumper::newInstance();
     SignalHandler::newInstance();
@@ -33,16 +30,13 @@ IServerMaster::IServerMaster()
     IOServiceManager::newInstance();
     SessionManager::newInstance();
     ConnectionManager::newInstance();
-    ConnectlessManager::newInstance();
 }
 
 IServerMaster::~IServerMaster()
 {
     instance_ = nullptr;
 
-    Session::ClearPacketQueuePool();
     Connection::ClearSendBufferPool();
-    Connectless::ClearQueueBufferPool();
     INetPacket::ClearNetPacketPool();
     CoreDumper::deleteInstance();
     SignalHandler::deleteInstance();
@@ -52,7 +46,6 @@ IServerMaster::~IServerMaster()
     IOServiceManager::deleteInstance();
     SessionManager::deleteInstance();
     ConnectionManager::deleteInstance();
-    ConnectlessManager::deleteInstance();
 }
 
 bool IServerMaster::ParseConfigFile(KeyFile &config, const std::string &file)

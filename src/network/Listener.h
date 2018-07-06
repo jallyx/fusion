@@ -25,6 +25,7 @@ protected:
     virtual std::string GetBindPort() = 0;
 
     virtual Session *NewSessionObject() = 0;
+    virtual void AddDataPipes(Session *session) {}
 
 private:
     void OnAcceptComplete(int family, SOCKET sockfd);

@@ -1,10 +1,13 @@
 #include "AsyncWorkingThread.h"
-#include "AsyncTaskMgr.h"
+#include "AsyncTask.h"
+#include "AsyncTaskOwner.h"
 #include "Exception.h"
+#include "Macro.h"
 
 AsyncWorkingThread::AsyncWorkingThread(
     ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> &tasks)
-: tasks_(tasks)
+: shared_tasks_(tasks)
+, idle_(false)
 {
 }
 
@@ -12,11 +15,33 @@ AsyncWorkingThread::~AsyncWorkingThread()
 {
 }
 
+void AsyncWorkingThread::AddTask(
+    const std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>& task)
+{
+    alone_tasks_.Enqueue(task);
+    cv_.notify_one();
+}
+
+bool AsyncWorkingThread::WakeIdle()
+{
+    if (idle_) {
+        cv_.notify_one();
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool AsyncWorkingThread::HasTask() const
+{
+    return !alone_tasks_.IsEmpty();
+}
+
 void AsyncWorkingThread::Kernel()
 {
     do {
         std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair;
-        while (tasks_.Dequeue(pair)) {
+        while (alone_tasks_.Dequeue(pair) || shared_tasks_.Dequeue(pair)) {
             TRY_BEGIN {
                 pair.first->ExecuteInAsync();
             } TRY_END
@@ -31,5 +56,21 @@ void AsyncWorkingThread::Kernel()
                 delete pair.first;
             }
         }
-    } while (sAsyncTaskMgr.WaitTask(&tasks_));
+    } while (WaitTask());
+}
+
+void AsyncWorkingThread::Finish()
+{
+    std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair;
+    while (alone_tasks_.Dequeue(pair)) {
+        delete pair.first;
+    }
+}
+
+bool AsyncWorkingThread::WaitTask()
+{
+    idle_ = true;
+    defer(idle_ = false);
+    const std::chrono::milliseconds duration(100);
+    return cv_.wait_for(fakelock_, duration) == std::cv_status::no_timeout;
 }

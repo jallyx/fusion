@@ -1,7 +1,7 @@
 #include "MapTile.h"
 #include "TileHandler.h"
 #include "TileActor.h"
-#include "Exception.h"
+#include "Debugger.h"
 
 ThreadSafePool<void, MAX_MAP_TILE_POOL_COUNT> MapTile::s_pool_;
 
@@ -24,6 +24,7 @@ MapTile::ActorItr MapTile::AddActor(TileActor *actor)
 
 MapTile::ActorItr MapTile::MigrateActor(MapTile *tile, ActorItr itr)
 {
+    DBGASSERT(handler_->traverse_number() == 0);
     if (handler_->anchor_actor() == *itr) {
         handler_->anchor_actor() = (*itr)->NextActor();
     }
@@ -36,6 +37,7 @@ MapTile::ActorItr MapTile::MigrateActor(MapTile *tile, ActorItr itr)
 
 void MapTile::RemoveActor(ActorItr itr)
 {
+    DBGASSERT(handler_->traverse_number() == 0);
     if (handler_->anchor_actor() == *itr) {
         handler_->anchor_actor() = (*itr)->NextActor();
     }

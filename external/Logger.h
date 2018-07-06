@@ -3,8 +3,7 @@
 #include "Singleton.h"
 #include "Thread.h"
 #include "ThreadSafeBlockQueue.h"
-#include "ThreadSafePool.h"
-#include <stdarg.h>
+#include "Exception.h"
 
 class Logger : public Thread, public Singleton<Logger>
 {
@@ -14,7 +13,14 @@ public:
     Logger();
     virtual ~Logger();
 
-    void Log(const char *file, const char *func, int line, char type, const char *fmt, ...);
+    struct LogInfo {
+        const char *file;
+        const char *func;
+        int line;
+        std::string s;
+    };
+
+    void Log(const LogInfo &info, char type, const char *fmt, ...);
 
 protected:
     virtual void Kernel();
@@ -25,18 +31,21 @@ private:
 
     void Color(char type);
 
-    ThreadSafeBlockQueue<std::string*> log_queue_;
+    ThreadSafeBlockQueue<std::string*, 256> log_queue_;
     ThreadSafePool<std::string, 256> str_pool_;
 };
 
 #define sLogger (*Logger::instance())
 
-#define NLOG(...) sLogger.Log(__FILE__, __FUNCTION__, __LINE__, 'N', __VA_ARGS__)
-#define WLOG(...) sLogger.Log(__FILE__, __FUNCTION__, __LINE__, 'W', __VA_ARGS__)
-#define ELOG(...) sLogger.Log(__FILE__, __FUNCTION__, __LINE__, 'E', __VA_ARGS__)
+#define sWLogInfo {__FILE__, __FUNCTION__, __LINE__}
+#define sELogInfo {__FILE__, __FUNCTION__, __LINE__, sBackTrace}
+
+#define NLOG(...) sLogger.Log({}, 'N', __VA_ARGS__)
+#define WLOG(...) sLogger.Log(sWLogInfo, 'W', __VA_ARGS__)
+#define ELOG(...) sLogger.Log(sELogInfo, 'E', __VA_ARGS__)
 
 #if defined(_DEBUG)
-#define DLOG(...) sLogger.Log(__FILE__, __FUNCTION__, __LINE__, 'D', __VA_ARGS__)
+#define DLOG(...) sLogger.Log({}, 'D', __VA_ARGS__)
 #else
 #define DLOG(...)
 #endif

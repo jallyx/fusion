@@ -18,3 +18,4 @@ template<typename T> ssize_t GetTableFieldIndexByName(const char *name);
 template<typename T> size_t GetTableFieldNumber();
 template<typename T> std::string GetTableFieldValue(const T &entity, size_t index);
 template<typename T> void SetTableFieldValue(T &entity, size_t index, const char *value);
+template<typename T> void InitTableValue(T &entity);

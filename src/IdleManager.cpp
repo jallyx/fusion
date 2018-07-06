@@ -11,11 +11,11 @@ IdleManager::~IdleManager()
 
 void IdleManager::Run(long ms)
 {
-    const uint64 expired_time = GET_REAL_APP_TIME + ms;
+    const uint64 expired_time = GET_REAL_SYS_TIME + ms;
     while (true) {
         RunSession();
         RunAsyncTaskOwner();
-        const uint64 current_time = GET_REAL_APP_TIME;
+        const uint64 current_time = GET_REAL_SYS_TIME;
         if (current_time >= expired_time) {
             break;
         }

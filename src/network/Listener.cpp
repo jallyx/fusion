@@ -108,6 +108,7 @@ void Listener::OnAcceptComplete(int family, SOCKET sockfd)
 {
     Session *session = NewSessionObject();
     std::shared_ptr<Connection> connPtr = sConnectionManager.NewConnection(*session);
+    AddDataPipes(session);
 
     const boost::asio::ip::tcp::socket::protocol_type protocol =
         family == AF_INET ? boost::asio::ip::tcp::v4() : boost::asio::ip::tcp::v6();

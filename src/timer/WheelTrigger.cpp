@@ -9,7 +9,7 @@ WheelTrigger::WheelTrigger(
 }
 
 WheelTrigger::WheelTrigger(
-    time_t trigger_interval, time_t trigger_point, uint32 loop_count)
+    uint64 trigger_interval, uint64 trigger_point, uint32 loop_count)
 : WheelTimer(trigger_interval, loop_count)
 , point_time_(trigger_point)
 {
@@ -21,7 +21,7 @@ WheelTrigger::~WheelTrigger()
 
 void WheelTrigger::GoNextActiveTime()
 {
-    const time_t actual_tick_time = GetActualTickTime();
+    const uint64 actual_tick_time = GetActualTickTime();
     while (actual_tick_time > point_time()) {
         go_next_point_time();
     }

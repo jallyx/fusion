@@ -16,6 +16,7 @@ public:
     void SetLoop(uint32 loop_count = 0);
 
     void DetachMgr();
+    void DeleteThis();
 
     uint64 GetActualTickTime() const;
     uint64 GetCurrentTickTime() const;
