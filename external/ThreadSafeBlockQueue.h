@@ -16,12 +16,12 @@ public:
     }
 
     bool Dequeue(T &v, long timeout_ms) {
-        if (data_queue_.Swap() && data_queue_.Dequeue(v)) {
+        if (data_queue_.Dequeue(v)) {
             return true;
         }
         const std::chrono::milliseconds duration(timeout_ms);
         if (cv_.wait_for(fakelock_, duration) == std::cv_status::no_timeout) {
-            if (data_queue_.Swap() && data_queue_.Dequeue(v)) {
+            if (data_queue_.Dequeue(v)) {
                 return true;
             }
         }

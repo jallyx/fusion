@@ -137,7 +137,7 @@ namespace StreamHelper {
     template<typename K, typename T> void AssociativeToStream(const std::unordered_map<K, T> &entity, std::ostream &stream) {
         uint32 number = (uint32)entity.size();
         ToStream(number, stream);
-        for (auto& pair : entity) {
+        for (auto &pair : entity) {
             ToStream(pair.first, stream);
             ToStream(pair.second, stream);
         }
@@ -157,7 +157,7 @@ namespace StreamHelper {
     template<typename K, typename T> void BlockAssociativeToStream(const std::unordered_map<K, T> &entity, std::ostream &stream) {
         uint32 number = (uint32)entity.size();
         ToStream(number, stream);
-        for (auto& pair : entity) {
+        for (auto &pair : entity) {
             ToStream(pair.first, stream);
             SaveToStream(pair.second, stream);
         }
@@ -401,7 +401,7 @@ private:
     template<typename K, typename T> void AssociativeToJson(const std::unordered_map<K, T> &entity, rapidjson::Value &value) {
         size_t number = entity.size();
         value.SetObject().MemberReserve(number, allocator_);
-        for (auto& pair : entity) {
+        for (auto &pair : entity) {
             rapidjson::Value name, gvalue;
             ToJson(pair.first, name);
             ToJson(pair.second, gvalue);
@@ -424,7 +424,7 @@ private:
     template<typename K, typename T> void BlockAssociativeToJson(const std::unordered_map<K, T> &entity, rapidjson::Value &value) {
         size_t number = entity.size();
         value.SetObject().MemberReserve(number, allocator_);
-        for (auto& pair : entity) {
+        for (auto &pair : entity) {
             rapidjson::Value name, gvalue;
             ToJson(pair.first, name);
             BlockToJson(pair.second, gvalue);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ThreadSafeQueue.h"
+#include "MultiBufferQueue.h"
 #include "ThreadSafeSet.h"
 #include "noncopyable.h"
 #include "enable_linked_from_this.h"
@@ -31,7 +31,7 @@ public:
     bool HasSubject() const;
 
 private:
-    ThreadSafeQueue<AsyncTask*> tasks_;
+    MultiBufferQueue<AsyncTask*> tasks_;
     ThreadSafeSet<const void *> subjects_;
 
     IEventObserver *event_observer_;

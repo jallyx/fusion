@@ -2,7 +2,7 @@
 #include "AsyncWorkingThread.h"
 
 #define GetAsyncWorkingThread(i) \
-    reinterpret_cast<AsyncWorkingThread*>(GetThreadInstance(i))
+    static_cast<AsyncWorkingThread*>(GetThreadInstance(i))
 
 std::weak_ptr<AsyncTaskOwner> AsyncTaskMgr::null_owner_;
 
@@ -31,7 +31,7 @@ void AsyncTaskMgr::Finish()
     }
 }
 
-bool AsyncTaskMgr::HasTask() const
+bool AsyncTaskMgr::HasTask()
 {
     if (!shared_tasks_.IsEmpty()) return true;
     for (size_t i = 0, n = GetThreadNumber(); i < n; ++i) {
@@ -57,15 +57,6 @@ void AsyncTaskMgr::AddTask(AsyncTask *task, AsyncTaskOwner *owner, ssize_t group
     }
 }
 
-void AsyncTaskMgr::WakeIdleAsyncWorkingThread()
-{
-    for (size_t i = 0, n = GetThreadNumber(); i < n; ++i) {
-        if (GetAsyncWorkingThread(i)->WakeIdle()) {
-            break;
-        }
-    }
-}
-
 void AsyncTaskMgr::AddHeavyTask(AsyncTask *task, AsyncTaskOwner *owner)
 {
     auto pair = BindAsyncTaskOwner(task, owner);
@@ -74,6 +65,15 @@ void AsyncTaskMgr::AddHeavyTask(AsyncTask *task, AsyncTaskOwner *owner)
         shared_tasks_.Enqueue(pair);
     } else {
         GetAsyncWorkingThread(0)->AddTask(pair);
+    }
+}
+
+void AsyncTaskMgr::WakeIdleAsyncWorkingThread()
+{
+    for (size_t i = 0, n = GetThreadNumber(); i < n; ++i) {
+        if (GetAsyncWorkingThread(i)->WakeIdle()) {
+            break;
+        }
     }
 }
 

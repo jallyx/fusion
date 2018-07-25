@@ -17,7 +17,7 @@ void SendDataFirstPipe::RemoveSendData(size_t size)
 
 bool SendDataFirstPipe::HasSendDataAwaiting() const
 {
-    return buffer_.HasSendDataAvail();
+    return buffer_.HasDataAwaiting();
 }
 
 size_t SendDataFirstPipe::GetSendDataSize() const
@@ -78,7 +78,7 @@ INetPacket *RecvDataLastPipe::ReadPacketFromBuffer()
 
 
 SendDataZlibPipe::SendDataZlibPipe()
-: buffer_(1 << 12)
+: buffer_(1 << 16)
 , flush_(true)
 {
 }
@@ -148,7 +148,7 @@ void SendDataZlibPipe::Compress()
 
 
 RecvDataZlibPipe::RecvDataZlibPipe()
-: buffer_(1 << 12)
+: buffer_(1 << 16)
 {
 }
 
@@ -187,7 +187,7 @@ void RecvDataZlibPipe::Decompress()
 }
 
 SendDataLz4Pipe::SendDataLz4Pipe()
-: buffer_(1 << 12)
+: buffer_(1 << 16)
 , flush_(true)
 {
 }
@@ -257,7 +257,7 @@ void SendDataLz4Pipe::Compress()
 
 
 RecvDataLz4Pipe::RecvDataLz4Pipe()
-: buffer_(1 << 12)
+: buffer_(1 << 16)
 {
 }
 

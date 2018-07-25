@@ -1,16 +1,15 @@
 #pragma once
 
 #include <cstdlib>
-#include <functional>
 #include "InlineFuncs.h"
 #include "ThreadSafePool.h"
 
 // be useful for:
-// multi producer, single consumer.
+// multi producer, single or multi consumer.
 
 #define S_MAX_BUFFER_QUEUE_POOL_COUNT (8)
 
-template <typename T, size_t N>
+template <typename T, size_t N = 128>
 class MultiBufferQueue
 {
     struct DataQueue {
@@ -32,11 +31,16 @@ public:
         } while (head_ != nullptr);
     }
 
+    bool IsEmpty() {
+        std::lock_guard<spinlock> lock(w_spin_);
+        return tail_->rpos >= tail_->wpos;
+    }
+
     void Enqueue(const T &v) {
         DataQueue *queue = nullptr;
 mark:   bool isOk = false;
         do {
-            std::lock_guard<spinlock> lock(spin_);
+            std::lock_guard<spinlock> lock(w_spin_);
             if (tail_->wpos >= N && queue != nullptr) {
                 tail_ = tail_->next = queue;
                 queue = nullptr;
@@ -59,25 +63,49 @@ mark:   bool isOk = false;
 
     bool Dequeue(T &v) {
         if (head_->rpos < head_->wpos) {
-            v = head_->queue[head_->rpos++];
+mark:       v = head_->queue[head_->rpos++];
             return true;
         }
-        return false;
-    }
-
-    bool Swap() {
         if (head_->rpos >= N && head_->next != nullptr) {
             auto next = head_->next;
             FreeQueue(head_);
             head_ = next;
+            goto mark;
         }
-        return head_->rpos < head_->wpos;
+        return false;
     }
 
-    DataQueue *head_, *tail_;
-    spinlock spin_;
+    bool DequeueSafe(T &v) {
+        DataQueue *queue = nullptr;
+        bool isOK = false;
+        do {
+            std::lock_guard<spinlock> lock(r_spin_);
+            if (head_->rpos < head_->wpos) {
+mark:           v = head_->queue[head_->rpos++];
+                isOK = true;
+                break;
+            }
+            if (head_->rpos >= N && head_->next != nullptr) {
+                queue = head_, head_ = head_->next;
+                goto mark;
+            }
+        } while (0);
+        if (queue != nullptr) {
+            FreeQueue(queue);
+        }
+        return isOK;
+    }
 
-public:
+private:
+    DataQueue *head_, *tail_;
+    spinlock r_spin_, w_spin_;
+
+private:
+    static void AutoQueuePool() {
+        InitQueuePool();
+        std::atexit(ClearQueuePool);
+    }
+
     static void InitQueuePool() {
     }
     static void ClearQueuePool() {
@@ -85,12 +113,6 @@ public:
         while ((queue = s_queue_pool_.Get()) != nullptr) {
             delete queue;
         }
-    }
-
-private:
-    static void AutoQueuePool() {
-        InitQueuePool();
-        std::atexit(ClearQueuePool);
     }
 
     static DataQueue *AllocQueue() {

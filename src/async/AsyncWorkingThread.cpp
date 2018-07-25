@@ -5,7 +5,7 @@
 #include "Macro.h"
 
 AsyncWorkingThread::AsyncWorkingThread(
-    ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> &tasks)
+    MultiBufferQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> &tasks)
 : shared_tasks_(tasks)
 , idle_(false)
 {
@@ -16,7 +16,7 @@ AsyncWorkingThread::~AsyncWorkingThread()
 }
 
 void AsyncWorkingThread::AddTask(
-    const std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>& task)
+    const std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> &task)
 {
     alone_tasks_.Enqueue(task);
     cv_.notify_one();
@@ -32,7 +32,7 @@ bool AsyncWorkingThread::WakeIdle()
     }
 }
 
-bool AsyncWorkingThread::HasTask() const
+bool AsyncWorkingThread::HasTask()
 {
     return !alone_tasks_.IsEmpty();
 }
@@ -41,7 +41,7 @@ void AsyncWorkingThread::Kernel()
 {
     do {
         std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>> pair;
-        while (alone_tasks_.Dequeue(pair) || shared_tasks_.Dequeue(pair)) {
+        while (alone_tasks_.Dequeue(pair) || shared_tasks_.DequeueSafe(pair)) {
             TRY_BEGIN {
                 pair.first->ExecuteInAsync();
             } TRY_END

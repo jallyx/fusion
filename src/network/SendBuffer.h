@@ -56,10 +56,6 @@ public:
         } while (head_ != nullptr);
     }
 
-    bool HasSendDataAvail() const {
-        return head_->wpos > head_->rpos;
-    }
-
     const char *GetSendDataBuffer(size_t &size) {
         if (head_->wpos > head_->rpos) {
             size = head_->wpos - head_->rpos;
@@ -105,6 +101,7 @@ public:
         Append(data, size, _.w);
     }
 
+    bool HasDataAwaiting() const { return size_.load() != 0; }
     size_t GetDataSize() const { return size_.load(); }
 
 private:

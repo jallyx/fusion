@@ -4,7 +4,6 @@
 #include "ThreadPool.h"
 #include "AsyncTask.h"
 #include "AsyncTaskOwner.h"
-#include "ThreadSafeQueue.h"
 
 class AsyncTaskMgr : public ThreadPool, public Singleton<AsyncTaskMgr>
 {
@@ -12,7 +11,7 @@ public:
     AsyncTaskMgr();
     virtual ~AsyncTaskMgr();
 
-    bool HasTask() const;
+    bool HasTask();
 
     void AddTask(AsyncTask *task, AsyncTaskOwner *owner = nullptr, ssize_t group = -1);
     void AddHeavyTask(AsyncTask *task, AsyncTaskOwner *owner = nullptr);
@@ -32,7 +31,7 @@ private:
     static std::weak_ptr<AsyncTaskOwner> null_owner_;
     size_t worker_count_;
 
-    ThreadSafeQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> shared_tasks_;
+    MultiBufferQueue<std::pair<AsyncTask*, std::weak_ptr<AsyncTaskOwner>>> shared_tasks_;
 };
 
 #define sAsyncTaskMgr (*AsyncTaskMgr::instance())

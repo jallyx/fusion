@@ -23,7 +23,6 @@ class Session
 public:
     enum Status {
         Idle,
-        Connecting,
         Running,
         Disabled,
     };
@@ -107,7 +106,7 @@ private:
     SessionManager *manager_;
 
     std::shared_ptr<Connection> connection_;
-    MultiBufferQueue<INetPacket*, 128> recv_queue_;
+    MultiBufferQueue<INetPacket*> recv_queue_;
 
     IEventObserver *event_observer_;
     bool is_overstocked_packet_;

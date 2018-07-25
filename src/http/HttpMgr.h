@@ -42,8 +42,8 @@ private:
 
     std::unordered_set<HttpClient*> client_list_;
     std::unordered_map<HttpClient*, ITaskObserver*> observer_list_;
-    MultiBufferQueue<std::pair<HttpClient*, ITaskObserver*>, 128> waiting_room_;
-    MultiBufferQueue<std::pair<HttpClient*, bool>, 128> recycle_bin_;
+    MultiBufferQueue<std::pair<HttpClient*, ITaskObserver*>> waiting_room_;
+    MultiBufferQueue<std::pair<HttpClient*, bool>> recycle_bin_;
 };
 
 #define sHttpMgr (*HttpMgr::instance())

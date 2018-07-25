@@ -27,33 +27,31 @@ void Session::Update()
     INetPacket *pck = nullptr;
     TRY_BEGIN {
 
-        while (IsActive() && recv_queue_.Swap()) {
-            while (IsActive() && recv_queue_.Dequeue(pck)) {
-                opcode = pck->GetOpcode();
-                switch (HandlePacket(pck)) {
-                case SessionHandleSuccess:
-                    break;
-                case SessionHandleCapture:
-                    pck = nullptr;
-                    break;
-                case SessionHandleUnhandle:
-                    DLOG("SessionHandleUnhandle Opcode[%u].", opcode);
-                    break;
-                case SessionHandleWarning:
-                    WLOG("Handle Opcode[%u] Warning!", opcode);
-                    break;
-                case SessionHandleError:
-                    ELOG("Handle Opcode[%u] Error!", opcode);
-                    break;
-                case SessionHandleKill:
-                default:
-                    WLOG("Fatal error occurred when processing opcode[%u], "
-                         "the session has been removed.", opcode);
-                    ShutdownSession();
-                    break;
-                }
-                SAFE_DELETE(pck);
+        while (IsActive() && recv_queue_.Dequeue(pck)) {
+            opcode = pck->GetOpcode();
+            switch (HandlePacket(pck)) {
+            case SessionHandleSuccess:
+                break;
+            case SessionHandleCapture:
+                pck = nullptr;
+                break;
+            case SessionHandleUnhandle:
+                DLOG("SessionHandleUnhandle Opcode[%u].", opcode);
+                break;
+            case SessionHandleWarning:
+                WLOG("Handle Opcode[%u] Warning!", opcode);
+                break;
+            case SessionHandleError:
+                ELOG("Handle Opcode[%u] Error!", opcode);
+                break;
+            case SessionHandleKill:
+            default:
+                WLOG("Fatal error occurred when processing opcode[%u], "
+                     "the session has been removed.", opcode);
+                ShutdownSession();
+                break;
             }
+            SAFE_DELETE(pck);
         }
 
     } TRY_END
@@ -74,7 +72,6 @@ void Session::ConnectServer(const std::string &address, const std::string &port)
 {
     std::shared_ptr<Connection> connPtr = sConnectionManager.NewConnection(*this);
     connPtr->AsyncConnect(address, port);
-    SetStatus(Connecting);
     sSessionManager.AddSession(this);
 }
 
@@ -366,10 +363,8 @@ void Session::PushSendFragmentPacket(uint32 opcode, ConstNetBuffer datas[], size
 void Session::ClearRecvPacket()
 {
     INetPacket *pck = nullptr;
-    while (recv_queue_.Swap()) {
-        while (recv_queue_.Dequeue(pck)) {
-            delete pck;
-        }
+    while (recv_queue_.Dequeue(pck)) {
+        delete pck;
     }
     do {
         std::lock_guard<std::mutex> lock(fragment_mutex_);
