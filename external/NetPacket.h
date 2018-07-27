@@ -71,6 +71,10 @@ template <size_t N>
 class TNetPacket : public INetPacket
 {
 public:
+    template <typename... Args>
+    TNetPacket(uint32 opcode, Args&&... args) : TNetPacket(opcode) {
+        swallow{ 0, (operator<<(std::forward<Args>(args)), 0)... };
+    }
     TNetPacket(uint32 opcode = 0) : INetPacket(opcode) {
         InitInternalBuffer(buffer_internal_, sizeof(buffer_internal_));
 #if defined(ENABLE_PROFILER)

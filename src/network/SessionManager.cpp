@@ -78,7 +78,7 @@ void SessionManager::UpdateSessions()
 void SessionManager::TickSessions()
 {
     for (auto session : sessions_) {
-        session->CheckTimeout();
+        session->OnTick();
     }
 }
 

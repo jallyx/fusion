@@ -62,7 +62,7 @@ public:
     virtual void OnShutdownSession();
 
     virtual void DeleteObject();
-    virtual void CheckTimeout() {}
+    virtual void OnTick() {}
     virtual void OnConnected() {}
     virtual void OnManaged() {}
 
@@ -94,6 +94,10 @@ protected:
     void ClearShutdownFlag();
     void ClearRecvPacket();
 
+    void set_overflow_packet_max_size(size_t size) {
+        overflow_packet_max_size_ = size;
+    }
+
 private:
     class LargePacketHelper;
     void PushRecvFragmentPacket(INetPacket *pck);
@@ -114,6 +118,7 @@ private:
     std::mutex fragment_mutex_;
     std::unordered_map<uint32, INetPacket*> fragment_packets_;
     std::atomic<uint32> overflow_packet_count_;
+    size_t overflow_packet_max_size_;
 
     std::atomic<time_t> shutdown_time_;
     uint64 last_recv_pck_time_, last_send_pck_time_;

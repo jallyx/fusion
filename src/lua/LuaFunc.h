@@ -2,8 +2,7 @@
 
 #include "LuaRef.h"
 #include "LuaTable.h"
-
-using swallow = int[];
+#include "Macro.h"
 
 template<typename... Args>
 void lua_pushargs(lua_State *L, Args&&... args) {

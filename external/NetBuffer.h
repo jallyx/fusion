@@ -16,6 +16,10 @@ template <size_t N>
 class TNetBuffer : public INetStream
 {
 public:
+    template <typename... Args>
+    TNetBuffer(Args&&... args) : TNetBuffer() {
+        swallow{ 0, (operator<<(std::forward<Args>(args)), 0)... };
+    }
     TNetBuffer() {
         InitInternalBuffer(buffer_internal_, sizeof(buffer_internal_));
 #if defined(ENABLE_PROFILER)

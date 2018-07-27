@@ -10,6 +10,7 @@ Session::Session()
 , event_observer_(nullptr)
 , is_overstocked_packet_(false)
 , overflow_packet_count_(0)
+, overflow_packet_max_size_(SIZE_MAX)
 , shutdown_time_(-1)
 , last_recv_pck_time_(GET_APP_TIME)
 , last_send_pck_time_(GET_APP_TIME)
@@ -287,6 +288,8 @@ void Session::PushRecvFragmentPacket(INetPacket *pck)
         if (packet_total_size < INetPacket::MAX_BUFFER_SIZE) {
             OnRecvPacket(&LargePacketHelper::UnpackPacket(*packet));
             fragment_packets_.erase(number);
+        } else if (packet->GetTotalSize() > overflow_packet_max_size_) {
+            THROW_EXCEPTION(NetStreamException());
         }
     } while (0);
 }

@@ -82,3 +82,5 @@ template <class F> struct __DEFER__ {
     ~__DEFER__() { f_(); }
     const F f_;
 };
+
+using swallow = int[];

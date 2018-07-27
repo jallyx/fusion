@@ -22,6 +22,9 @@ public:
     std::weak_ptr<const T> linked_from_this() const {
         return this_ptr_;
     }
+    void disable_linked_from_this() {
+        this_ptr_.reset(nullptr);
+    }
 private:
     std::shared_ptr<T> this_ptr_;
 };
