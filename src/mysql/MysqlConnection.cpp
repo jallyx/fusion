@@ -34,7 +34,7 @@ bool MysqlConnection::Connect(const char *host, unsigned int port,
         return false;
     }
 
-    const my_bool optval = true;
+    const bool optval = true;
     if (mysql_options(mysql, MYSQL_OPT_RECONNECT, &optval) != 0) {
         WLOG("MysqlConnection: Could not set reconnect mode.");
     }

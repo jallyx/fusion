@@ -69,11 +69,11 @@ namespace os {
     IS_INPTR_CONTAIN_VALUE(Vector.data(),Vector.size(),Value)
 
 #include <utility>
-#define defer(directives) \
+#define _defer(directives) \
     auto JOIN(__lambda__, __LINE__) = [=](){ directives; }; \
     __DEFER__<decltype(JOIN(__lambda__, __LINE__))> \
         JOIN(__defer__, __LINE__)(std::move(JOIN(__lambda__, __LINE__)));
-#define defer_r(directives) \
+#define _defer_r(directives) \
     auto JOIN(__lambda__, __LINE__) = [&](){ directives; }; \
     __DEFER__<decltype(JOIN(__lambda__, __LINE__))> \
         JOIN(__defer__, __LINE__)(std::move(JOIN(__lambda__, __LINE__)));

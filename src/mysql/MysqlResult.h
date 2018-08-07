@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mysql/mysql.h>
+#include <mysql.h>
 #include <stdlib.h>
 #include "Base.h"
 #include "noncopyable.h"

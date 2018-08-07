@@ -70,7 +70,7 @@ void AsyncWorkingThread::Finish()
 bool AsyncWorkingThread::WaitTask()
 {
     idle_ = true;
-    defer(idle_ = false);
+    _defer(idle_ = false);
     const std::chrono::milliseconds duration(100);
     return cv_.wait_for(fakelock_, duration) == std::cv_status::no_timeout;
 }
